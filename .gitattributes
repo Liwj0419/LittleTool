@@ -1,0 +1,22 @@
+# 全仓库行尾统一为 LF。
+# 本机 core.autocrlf=true，检出时会把文本文件转成 CRLF，
+# 而启动 bat 必须是 LF（见 AGENTS.md 第 3 条），所以这里显式压住。
+* text=auto eol=lf
+
+# 脚本类显式声明，不依赖自动探测
+*.bat   text eol=lf
+*.cmd   text eol=lf
+*.sh    text eol=lf
+*.py    text eol=lf
+*.md    text eol=lf
+*.json  text eol=lf
+*.html  text eol=lf
+*.txt   text eol=lf
+*.ico   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.exe   binary
+*.dll   binary
+*.asar  binary

@@ -1,0 +1,72 @@
+# ============================================================
+# 本文件夹是独立工具的合集，各自是完整项目（见 AGENTS.md）
+# 只提交：源码、assets/、config.json、requirements.txt、start.bat、run.sh、README
+# 其余一律不进版本库
+# ============================================================
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.so
+
+# 测试 / 类型检查 / 格式化缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# ---------- 虚拟环境 ----------
+# 首次运行 start.bat / run.sh 会自动创建并安装 requirements.txt，属于本机产物
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# ---------- 运行日志与自检产物 ----------
+# 说明：app.log 写在 %APPDATA% / %LOCALAPPDATA%，本来就不进仓库；
+#       但 --selftest 的 selftest.log 和多张截图是直接落在项目根目录的，必须挡掉。
+#       注意不要写成 *.png，assets/icon.ico、tools/preview-*.png、界面预览.png 是要提交的。
+*.log
+selftest*.png
+selftest*.txt
+state.json
+*.tmp
+~$*
+
+# ---------- 打包 / 编译产物 ----------
+# AGENTS.md 第 2 条：禁止产出 exe，不打包。以下规则用于防止旧做法回潮。
+dist/
+build/
+.build/
+*.spec
+*.exe
+*.pdb
+*.ilk
+*.obj
+*.o
+*.a
+
+# 历史 .NET 构建目录（disk_analysis 曾用 net48，translation 曾用 net10）
+[Bb]in/
+[Oo]bj/
+.vs/
+
+# ---------- 编辑器 / 系统 ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- 本仓库专用 ----------
+# AI 会话记忆，每次对话都会重新生成，不属于源码
+.workbuddy-ai/
+.workbuddy/
+
+# 旧实现残留（AGENTS.md 第 4 条：换实现时旧东西要删干净，不允许留备份）
+_old/

@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manager</title>
+<style>
+  :root{
+    --bg:#0f1116;
+    --panel:#14171e;
+    --panel-2:#171b23;
+    --line:rgba(255,255,255,.07);
+    --line-strong:rgba(255,255,255,.13);
+    --text:#e8ecf4;
+    --text-2:#9aa3b4;
+    --text-3:#6b7385;
+    --accent:#6aa9ff;
+    --accent-soft:rgba(106,169,255,.16);
+    --ok:#43d08b;
+    --idle:#5c6373;
+    --win:#f0b34a;
+    --danger:#ff6b6b;
+    --hover:rgba(255,255,255,.035);
+    --shadow:0 18px 50px rgba(0,0,0,.45);
+  }
+  :root[data-theme="light"]{
+    --bg:#f2f4f8;
+    --panel:#ffffff;
+    --panel-2:#f8fafc;
+    --line:rgba(15,23,42,.08);
+    --line-strong:rgba(15,23,42,.14);
+    --text:#151a23;
+    --text-2:#5c6675;
+    --text-3:#8c95a5;
+    --accent:#2f74e0;
+    --accent-soft:rgba(47,116,224,.11);
+    --ok:#12955c;
+    --idle:#a6adba;
+    --win:#b8760d;
+    --danger:#d64545;
+    --hover:rgba(15,23,42,.03);
+    --shadow:0 18px 50px rgba(15,23,42,.14);
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ height:100%; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font:13px/1.5 "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", system-ui, sans-serif;
+    overflow:hidden;
+    user-select:none;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer; }
+
+  .app{
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    background:var(--bg);
+  }
+
+  /* ---------------------------------------------------------- 标题栏 */
+  .titlebar{
+    height:42px;
+    flex:0 0 42px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 6px 0 16px;
+    border-bottom:1px solid var(--line);
+    background:var(--panel);
+    cursor:default;
+  }
+  .brand{ display:flex; align-items:center; gap:9px; font-weight:600; letter-spacing:.2px; }
+  .brand .mark{
+    width:16px; height:16px; border-radius:5px;
+    background:linear-gradient(135deg, var(--accent), #8f7bff);
+    box-shadow:0 0 0 1px rgba(255,255,255,.06) inset;
+  }
+  .brand small{ color:var(--text-3); font-weight:400; letter-spacing:.4px; }
+
+  .winctl{ display:flex; gap:2px; }
+  .wbtn{
+    width:22px; height:22px;
+    display:grid; place-items:center;
+    border-radius:6px;
+    color:var(--text-2);
+    font-size:12px;
+    transition:background .12s, color .12s;
+  }
+  .wbtn:hover{ background:var(--hover); color:var(--text); }
+  .wbtn.close:hover{ background:#e5484d; color:#fff; }
+
+  /* ---------------------------------------------------------- 头部 */
+  .head{
+    flex:0 0 auto;
+    display:flex;
+    align-items:flex-end;
+    justify-content:space-between;
+    gap:16px;
+    padding:20px 20px 14px;
+  }
+  .head h1{ margin:0; font-size:17px; font-weight:600; letter-spacing:.2px; }
+  .head p{ margin:5px 0 0; color:var(--text-3); font-size:12px; }
+  .head .actions{ display:flex; gap:8px; }
+
+  .ghost{
+    height:30px; padding:0 12px;
+    border:1px solid var(--line-strong);
+    border-radius:7px;
+    color:var(--text-2);
+    font-size:12px;
+    transition:background .12s, color .12s, border-color .12s;
+  }
+  .ghost:hover{ background:var(--hover); color:var(--text); border-color:var(--line-strong); }
+  .ghost:active{ transform:translateY(1px); }
+
+  /* ---------------------------------------------------------- 列表 */
+  .table{
+    flex:1 1 auto;
+    margin:0 20px;
+    min-height:0;
+    display:flex;
+    flex-direction:column;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--panel);
+    overflow:hidden;
+  }
+  .thead, .row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 132px 62px 108px;
+    align-items:center;
+    gap:8px;
+    padding:0 14px;
+  }
+  .thead{
+    position:sticky;
+    top:0;
+    z-index:2;
+    height:30px;
+    color:var(--text-3);
+    font-size:11px;
+    letter-spacing:.6px;
+    text-transform:uppercase;
+    border-bottom:1px solid var(--line);
+    background:var(--panel-2);
+  }
+  .thead span:nth-child(3){ text-align:center; }
+  .thead span:last-child{ text-align:right; }
+
+  .rows{ flex:1 1 auto; overflow-y:auto; overflow-x:hidden; }
+  .rows::-webkit-scrollbar{ width:10px; }
+  .rows::-webkit-scrollbar-thumb{ background:var(--line-strong); border-radius:6px; border:3px solid transparent; background-clip:content-box; }
+
+  .row{
+    height:56px;
+    border-bottom:1px solid var(--line);
+    transition:background .12s;
+  }
+  .row:last-child{ border-bottom:0; }
+  .row:hover{ background:var(--hover); }
+  .row.busy{ opacity:.6; }
+  .row.installing{ opacity:1; }
+
+  .name{ min-width:0; }
+  .name .cn{
+    display:block;
+    font-size:13.5px;
+    font-weight:500;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .name .sub{
+    display:flex; align-items:center; gap:8px;
+    margin-top:2px;
+    color:var(--text-3);
+    font-size:11.5px;
+  }
+  .name .en{
+    font-family:"Cascadia Mono", "Consolas", ui-monospace, monospace;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .key{
+    flex:0 0 auto;
+    padding:1px 5px;
+    border:1px solid var(--line);
+    border-radius:4px;
+    color:var(--text-3);
+    font-family:"Cascadia Mono", "Consolas", ui-monospace, monospace;
+    font-size:10.5px;
+    line-height:1.5;
+  }
+  .tag{
+    flex:0 0 auto;
+    padding:1px 5px;
+    border-radius:4px;
+    background:var(--accent-soft);
+    color:var(--accent);
+    font-size:10.5px;
+    line-height:1.5;
+  }
+
+  .state{ display:flex; align-items:center; gap:7px; color:var(--text-2); font-size:12px; min-width:0; }
+  .state > span{ min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .state i{
+    width:7px; height:7px; border-radius:50%;
+    background:var(--idle);
+    flex:0 0 auto;
+  }
+  .state.on i{ background:var(--ok); box-shadow:0 0 0 3px rgba(67,208,139,.14); }
+  .state.win i{ background:var(--win); box-shadow:0 0 0 3px rgba(240,179,74,.14); }
+  .state.on, .state.win{ color:var(--text); }
+  .state.installing{ color:var(--accent); }
+  .state.installing i{
+    background:none;
+    width:9px; height:9px;
+    border:1.5px solid var(--accent-soft);
+    border-top-color:var(--accent);
+    animation:spin .7s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* ---------------------------------------------------------- 开关 */
+  .tcell{ display:flex; justify-content:center; }
+  .switch{ display:inline-flex; }
+  .switch input{ position:absolute; opacity:0; width:0; height:0; }
+  .switch span{
+    position:relative;
+    width:36px; height:20px;
+    border-radius:20px;
+    background:rgba(128,138,156,.28);
+    transition:background .16s;
+    cursor:pointer;
+  }
+  .switch span::after{
+    content:"";
+    position:absolute; top:2px; left:2px;
+    width:16px; height:16px;
+    border-radius:50%;
+    background:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.3);
+    transition:transform .16s;
+  }
+  .switch input:checked + span{ background:var(--accent); }
+  .switch input:checked + span::after{ transform:translateX(16px); }
+  .switch input:focus-visible + span{ outline:2px solid var(--accent-soft); outline-offset:2px; }
+  .switch.disabled span{ opacity:.45; cursor:progress; }
+
+  .tools{ display:flex; justify-content:flex-end; gap:2px; }
+  .tool{
+    width:28px; height:28px;
+    display:grid; place-items:center;
+    border-radius:6px;
+    color:var(--text-3);
+    transition:background .12s, color .12s;
+  }
+  .tool:hover{ background:var(--accent-soft); color:var(--accent); }
+  .tool svg{ width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+
+  /* ---------------------------------------------------------- 底栏 */
+  footer{
+    flex:0 0 34px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 20px;
+    color:var(--text-3);
+    font-size:11.5px;
+  }
+  footer .right{ display:flex; align-items:center; gap:6px; }
+  footer .link{ color:var(--text-3); text-decoration:none; border-bottom:1px dotted var(--line-strong); cursor:pointer; }
+  footer .link:hover{ color:var(--text-2); }
+
+  .empty{
+    height:100%;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; color:var(--text-3); font-size:12.5px;
+  }
+
+  /* ---------------------------------------------------------- toast */
+  #toast{
+    position:fixed; left:50%; bottom:44px;
+    transform:translate(-50%, 10px);
+    max-width:70%;
+    padding:8px 14px;
+    border-radius:8px;
+    background:var(--panel-2);
+    border:1px solid var(--line-strong);
+    box-shadow:var(--shadow);
+    color:var(--text);
+    font-size:12.5px;
+    opacity:0; pointer-events:none;
+    transition:opacity .18s, transform .18s;
+    white-space:pre-wrap;
+  }
+  #toast.show{ opacity:1; transform:translate(-50%, 0); }
+  #toast.bad{ border-color:rgba(255,107,107,.5); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="titlebar" id="titlebar">
+    <div class="brand"><span class="mark"></span>Manager <small>软件总控台</small></div>
+    <div class="winctl">
+      <button class="wbtn" id="btnMin" title="最小化"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2 5h6"/></svg></button>
+      <button class="wbtn close" id="btnClose" title="关闭"><svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M2.5 2.5l5 5m0-5l-5 5"/></svg></button>
+    </div>
+  </header>
+
+  <section class="head">
+    <div>
+      <h1>软件</h1>
+      <p id="summary">读取中…</p>
+    </div>
+    <div class="actions">
+      <button class="ghost" id="btnStartAll">全部启动</button>
+      <button class="ghost" id="btnStopAll">全部停止</button>
+    </div>
+  </section>
+
+  <div class="table">
+    <div class="rows" id="rows">
+      <div class="thead">
+        <span>软件</span>
+        <span>状态</span>
+        <span>运行</span>
+        <span></span>
+      </div>
+      <div id="list">
+        <div class="empty">正在读取…</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span id="hint"></span>
+    <span class="right">
+      <span class="link" id="btnCfg">Manager 配置</span>
+    </span>
+  </footer>
+</div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var api = null;
+  var state = null;
+  var rowsEl = document.getElementById("rows");
+  var listEl = document.getElementById("list");
+  var toastEl = document.getElementById("toast");
+  var toastTimer = 0;
+  var pollTimer = 0;
+  var booted = false;
+
+  var ICON_OPEN =
+    '<svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4l-8.5 8.5"/>' +
+    '<path d="M19 14.5V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V6.5A1.5 1.5 0 0 1 5 5h4.5"/></svg>';
+  var ICON_FOLDER =
+    '<svg viewBox="0 0 24 24"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h4l1.8 2H19a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg>';
+  var ICON_CFG =
+    '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/>' +
+    '<path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>';
+
+  // ------------------------------------------------------------ 小工具
+
+  function esc(text) {
+    return String(text == null ? "" : text).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function toast(message, bad) {
+    toastEl.textContent = message || "";
+    toastEl.classList.toggle("bad", !!bad);
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toastEl.classList.remove("show"); }, 3200);
+  }
+
+  function applyTheme(name) {
+    var theme = name || "auto";
+    if (theme === "auto") {
+      theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    document.documentElement.setAttribute("data-theme", theme === "light" ? "light" : "dark");
+  }
+
+  // ------------------------------------------------------------ 渲染
+
+  function rowHtml(app) {
+    var sub = '<span class="en">' + esc(app.en) + "</span>";
+    if (app.hotkey) sub += '<span class="key">' + esc(app.hotkey) + "</span>";
+
+    return (
+      '<div class="row" data-id="' + esc(app.id) + '">' +
+        '<div class="name">' +
+          '<span class="cn" title="' + esc(app.cn) + '">' + esc(app.cn) + "</span>" +
+          '<span class="sub">' + sub + "</span>" +
+        "</div>" +
+        '<div class="state" data-role="state"><i></i><span>—</span></div>' +
+        '<div class="tcell"><label class="switch" data-role="run"><input type="checkbox"><span></span></label></div>' +
+        '<div class="tools">' +
+          (app.openable ? '<button class="tool" data-role="open" title="打开窗口">' + ICON_OPEN + "</button>" : "") +
+          '<button class="tool" data-role="cfg" title="打开配置表">' + ICON_CFG + "</button>" +
+          '<button class="tool" data-role="folder" title="打开所在文件夹">' + ICON_FOLDER + "</button>" +
+        "</div>" +
+      "</div>"
+    );
+  }
+
+  function render(payload) {
+    state = payload;
+    applyTheme(payload.theme);
+
+    if (!payload.apps || !payload.apps.length) {
+      listEl.innerHTML = '<div class="empty">配置里的「apps」还没有可展示的软件</div>';
+      document.getElementById("summary").textContent = payload.root;
+      return;
+    }
+
+    listEl.innerHTML = payload.apps.map(rowHtml).join("");
+    rowsEl.querySelectorAll(".row").forEach(function (row) {
+      var id = row.dataset.id;
+
+      row.querySelector('[data-role="run"] input').addEventListener("change", function (e) {
+        e.stopPropagation();
+        toggleRun(id, this.checked, this);
+      });
+      var openBtn = row.querySelector('[data-role="open"]');
+      if (openBtn) {
+        openBtn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          call(api.show_app(id), "已唤起");
+        });
+      }
+      row.querySelector('[data-role="cfg"]').addEventListener("click", function (e) {
+        e.stopPropagation();
+        call(api.open_config(id), "已打开配置表");
+      });
+      row.querySelector('[data-role="folder"]').addEventListener("click", function (e) {
+        e.stopPropagation();
+        call(api.open_folder(id), "已打开文件夹");
+      });
+      row.addEventListener("dblclick", function () {
+        if (openBtn) call(api.show_app(id), "已唤起");
+      });
+      row.addEventListener("contextmenu", function (e) {
+        e.preventDefault();
+        api.open_folder(id);
+      });
+    });
+
+    updateStatus(payload.status || {});
+    updateBusy(payload.busy || [], Object.keys(payload.installing || {}));
+    reportInstallErrors(payload.installError);
+    updateSummary();
+  }
+
+  function updateStatus(status) {
+    rowsEl.querySelectorAll(".row").forEach(function (row) {
+      var info = status[row.dataset.id];
+      if (!info) return;
+      var cell = row.querySelector('[data-role="state"]');
+      cell.className = "state" +
+        (info.state === "installing" ? " installing"
+          : info.state === "window" ? " win"
+          : info.running ? " on" : "");
+      var label = cell.querySelector("span");
+      label.textContent = info.text;
+      cell.title = info.error || info.text || "";
+
+      var box = row.querySelector('[data-role="run"] input');
+      if (document.activeElement !== box) {
+        // 装环境时开关先亮着：装完它会自己启动，别让开关弹回去
+        box.checked = info.state === "installing" ? true : !!info.running;
+      }
+    });
+  }
+
+  function updateBusy(list, installing) {
+    var set = {};
+    (list || []).forEach(function (id) { set[id] = 1; });
+    var inst = {};
+    (installing || []).forEach(function (id) { inst[id] = 1; });
+    rowsEl.querySelectorAll(".row").forEach(function (row) {
+      var id = row.dataset.id;
+      var busy = !!set[id] || !!inst[id];
+      row.classList.toggle("busy", busy);
+      row.classList.toggle("installing", !!inst[id]);
+      row.querySelector('[data-role="run"]').classList.toggle("disabled", busy);
+    });
+  }
+
+  // 装环境失败只在冒出新错误时弹一次，别每次轮询都刷屏
+  var seenErrors = {};
+  function reportInstallErrors(map) {
+    var errors = map || {};
+    Object.keys(seenErrors).forEach(function (id) {
+      if (!errors[id]) delete seenErrors[id];
+    });
+    Object.keys(errors).forEach(function (id) {
+      if (seenErrors[id] === errors[id]) return;
+      seenErrors[id] = errors[id];
+      var text = String(errors[id] || "");
+      if (text.length > 260) text = text.slice(0, 260) + "…（详细输出见 app.log）";
+      toast(text, true);
+    });
+  }
+
+  function updateSummary() {
+    if (!state || !state.apps) return;
+    var status = state.status || {};
+    var running = 0;
+    var background = 0;
+    Object.keys(status).forEach(function (id) {
+      if (status[id].running) running++;
+      if (status[id].state === "background") background++;
+    });
+    var total = state.apps.length;
+    var text = total + " 个软件 · " + running + " 个在运行";
+    if (background) text += "（" + background + " 个挂后台）";
+    document.getElementById("summary").textContent = text;
+
+    var shortcuts = state.shortcuts || {};
+    var parts = [];
+    if (shortcuts.global) parts.push(shortcuts.global + " 唤出");
+    if (shortcuts.hide) parts.push(shortcuts.hide + " 收起");
+    document.getElementById("hint").textContent = parts.join("  ·  ");
+  }
+
+  // ------------------------------------------------------------ 动作
+
+  function call(promise, okText) {
+    if (!promise || typeof promise.then !== "function") return promise;
+    return promise.then(function (result) {
+      if (result && result.ok === false) {
+        toast(result.message || "操作失败", true);
+      } else if (result && result.pending && result.message) {
+        toast(result.message, false);  // 正在装环境 / 稍后才启动
+      } else if (okText) {
+        toast(okText, false);
+      }
+      if (result && result.state) {
+        if (result.state.status) {
+          state.status = result.state.status;
+          updateStatus(result.state.status);
+        }
+        if (result.state.busy || result.state.installing) {
+          updateBusy(result.state.busy || [],
+            Object.keys(result.state.installing || {}));
+        }
+        if (result.state.installError) reportInstallErrors(result.state.installError);
+        updateSummary();
+      }
+      return result;
+    }).catch(function (error) {
+      toast("出错了：" + (error && error.message ? error.message : error), true);
+    });
+  }
+
+  function toggleRun(id, on, box) {
+    var row = box.closest(".row");
+    var wrap = row.querySelector('[data-role="run"]');
+    if (wrap.classList.contains("disabled")) {  // 正在启动 / 装环境，先别插队
+      box.checked = !on;
+      return;
+    }
+    wrap.classList.add("disabled");
+    call(api.toggle(id, on), on ? "已启动" : "已停止").then(refresh);
+  }
+
+  function refresh() {
+    if (!api) return;
+    api.poll().then(function (data) {
+      if (!data) return;
+      // 配置动过：后端把新清单一起送回来，整表按 apps 的顺序重绘
+      if (data.apps) {
+        render(data);
+        return;
+      }
+      state.status = data.status;
+      updateStatus(data.status || {});
+      updateBusy(data.busy || [], Object.keys(data.installing || {}));
+      reportInstallErrors(data.installError);
+      updateSummary();
+    }).catch(function () {});
+  }
+
+  // ------------------------------------------------------------ 初始化
+
+  function boot() {
+    if (booted) return;
+    booted = true;
+    api = window.pywebview.api;
+    api.get_state().then(function (payload) {
+      render(payload);
+      clearInterval(pollTimer);
+      pollTimer = setInterval(function () {
+        if (document.hidden) return;
+        refresh();
+      }, Math.max(500, payload.pollMs || 1500));
+    }).catch(function (error) {
+      toast("读取失败：" + error, true);
+    });
+  }
+
+  window.addEventListener("pywebviewready", boot);
+
+  // 页面自己刷新后 pywebview 已经就绪的情况
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.pywebview && window.pywebview.api) boot();
+  });
+
+  // ------------------------------------------------------------ 窗口行为
+
+  var titlebar = document.getElementById("titlebar");
+  titlebar.addEventListener("mousedown", function (e) {
+    if (e.button !== 0 || e.target.closest(".wbtn")) return;
+    api && api.drag();
+  });
+
+  ["btnMin", "btnClose"].forEach(function (id) {
+    document.getElementById(id).addEventListener("mousedown", function (e) { e.preventDefault(); });
+  });
+  document.getElementById("btnMin").addEventListener("click", function () { api && api.minimize(); });
+  document.getElementById("btnClose").addEventListener("click", function () { api && api.hide(); });
+
+  document.getElementById("btnStartAll").addEventListener("click", function () {
+    call(api.start_all(), "已全部启动").then(refresh);
+  });
+  document.getElementById("btnStopAll").addEventListener("click", function () {
+    call(api.stop_all(), "已全部停止").then(refresh);
+  });
+  document.getElementById("btnCfg").addEventListener("click", function () {
+    api && api.open_manager_config();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      api && api.hide();
+    } else if (e.key === "F5") {
+      e.preventDefault();
+      api && api.reload().then(render);
+    }
+  });
+
+  window.__focus = function () {
+    var box = document.querySelector('.row [data-role="run"] input');
+    if (box) box.focus({ preventScroll: true });
+  };
+  // 窗口每次露面前立刻刷一遍运行状态
+  window.__refresh = function () {
+    if (!state) { boot(); return; }
+    refresh();
+  };
+  window.__ready = function () {
+    if (!state) boot();
+  };
+})();
+</script>
+</body>
+</html>

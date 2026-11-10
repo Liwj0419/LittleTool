@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Excel 数据查看器</title>
+<style>
+  :root{
+    --bg:#ffffff; --bar:#f6f7f9; --border:#e3e6ea; --text:#1f2328;
+    --dim:#6b7280; --head:#eef1f5; --stripe:#fafbfc; --sel:#d8e6ff;
+    --accent:#2f6feb; --accent-h:#2560d4; --err:#c0392b; --rowh:26px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);
+    color:var(--text);
+    font:12px/1.4 "Microsoft YaHei UI","Segoe UI","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  #app{display:flex;flex-direction:column;height:100%}
+
+  /* ---------- 工具条 ---------- */
+  .bar,.bar2{flex:0 0 auto;background:var(--bar);display:flex;align-items:center;
+    gap:6px;padding:0 10px 0 16px}
+  .bar{height:44px;border-bottom:1px solid var(--border)}
+  .bar2{height:40px;border-bottom:1px solid var(--border)}
+  .title{position:absolute;left:50%;transform:translateX(-50%);
+    font-size:12.5px;color:var(--text);max-width:46vw;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;pointer-events:none}
+  .grow{flex:1 1 auto}
+  .lbl{color:var(--dim);margin-left:4px}
+
+  .btn{border:0;background:transparent;color:var(--text);font:inherit;
+    padding:6px 10px;border-radius:5px;cursor:pointer;display:flex;
+    align-items:center;gap:4px;white-space:nowrap}
+  .btn:hover{background:#e9ecf1}
+  .btn:active{background:#dfe3e9}
+  .btn[disabled]{color:#b6bcc4;cursor:default;background:transparent}
+  .caret{font-size:9px;color:var(--dim)}
+
+  .dd{display:flex;align-items:center;gap:6px;height:26px;padding:0 8px;
+    background:#fff;border:1px solid #cfd5dd;border-radius:4px;color:var(--text);
+    font:inherit;cursor:pointer;max-width:260px}
+  .dd:hover{border-color:#a9b3c0}
+  .dd span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dd i{font-style:normal;font-size:9px;color:var(--dim);margin-left:auto}
+
+  /* 开关 */
+  .switch{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;
+    color:var(--text)}
+  .switch input{display:none}
+  .track{width:34px;height:18px;border-radius:9px;background:#c8cfd8;
+    position:relative;transition:background .15s}
+  .track::after{content:"";position:absolute;top:2px;left:2px;width:14px;
+    height:14px;border-radius:50%;background:#fff;transition:transform .15s;
+    box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .switch input:checked + .track{background:var(--accent)}
+  .switch input:checked + .track::after{transform:translateX(16px)}
+
+  .search{position:relative;margin-left:4px}
+  .search input{width:220px;height:26px;padding:0 26px 0 9px;border-radius:4px;
+    border:1px solid #cfd5dd;background:#fff;color:var(--text);font:inherit;
+    outline:none}
+  .search input:focus{border-color:var(--accent);
+    box-shadow:0 0 0 2px rgba(47,111,235,.12)}
+  .search .clr{position:absolute;right:6px;top:50%;transform:translateY(-50%);
+    border:0;background:transparent;color:var(--dim);cursor:pointer;
+    font-size:13px;line-height:1;padding:2px;display:none}
+  .search.has .clr{display:block}
+
+  /* ---------- 表格 ---------- */
+  #wrap{flex:1 1 auto;display:flex;min-height:0;padding-left:16px}
+  #grid{flex:1 1 auto;min-width:0;overflow:auto;position:relative;
+    background:var(--bg);outline:none}
+  #head{position:sticky;top:0;z-index:5;display:flex;width:max-content;
+    min-width:100%;background:var(--head);
+    box-shadow:0 1px 0 var(--border)}
+  #body{position:relative;width:max-content;min-width:100%}
+  #win{position:absolute;left:0;top:0}
+
+  .cell{flex:0 0 auto;padding:0 8px;line-height:var(--rowh);height:var(--rowh);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    border-right:1px solid #eef0f3}
+  #head .cell{font-weight:600;color:#333a44;cursor:pointer;user-select:none;
+    border-right:1px solid #dfe3e9;display:flex;align-items:center}
+  #head .cell.static{cursor:default}
+  #head .cell .h{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #head .cell:hover{background:#e6eaf0}
+  #head .cell.static:hover{background:transparent}
+
+  .row{position:absolute;left:0;display:flex;width:max-content;height:var(--rowh)}
+  .row.stripe{background:var(--stripe)}
+  .row .cell{color:var(--text)}
+  .cell.no{color:var(--dim);text-align:right;padding-right:8px;
+    border-right:1px solid #eef0f3}
+  .cell.sheet{cursor:pointer;color:#33415c}
+  .cell.sheet:hover{color:var(--accent)}
+  .cell .go{color:var(--accent);margin-right:6px;font-weight:600}
+  .cell.sel{background:var(--sel)!important}
+  #head .cell.sel{background:var(--sel)!important}
+  /* 跳转落地行：一直留着，直到换文件 / 换表 / 重新搜索，方便回头再找 */
+  .row.land{background:#fde68a!important;box-shadow:inset 3px 0 0 #f59e0b}
+
+  /* ---------- 空状态 / 状态栏 ---------- */
+  #empty{position:absolute;inset:0;display:none;flex-direction:column;
+    align-items:center;justify-content:center;gap:10px;background:var(--bg);
+    text-align:center;padding:40px}
+  #empty.show{display:flex}
+  #empty .t{font-size:14px;color:var(--text)}
+  #empty .h{font-size:12px;color:var(--dim);white-space:pre-wrap;
+    max-width:640px;line-height:1.7}
+  #empty .h.err{color:var(--err)}
+  #empty button{margin-top:4px;padding:7px 16px;border-radius:5px;border:1px solid
+    var(--accent);background:var(--accent);color:#fff;font:inherit;cursor:pointer}
+  #empty button:hover{background:var(--accent-h)}
+
+  .status{flex:0 0 auto;height:28px;display:flex;align-items:center;gap:8px;
+    padding:0 12px 0 16px;background:var(--bar);border-top:1px solid var(--border);
+    color:var(--dim);font-size:11.5px;white-space:nowrap;overflow:hidden}
+  .status b{font-weight:400;color:var(--text)}
+
+  /* ---------- 下拉面板 ---------- */
+  .pop{position:fixed;z-index:50;min-width:160px;max-height:60vh;overflow:auto;
+    background:#fff;border:1px solid #cfd5dd;border-radius:6px;
+    box-shadow:0 8px 26px rgba(15,23,42,.16);padding:4px;display:none}
+  .pop.show{display:block}
+  .pop .it{padding:6px 10px;border-radius:4px;cursor:pointer;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:420px}
+  .pop .it:hover{background:#eef2f8}
+  .pop .it.on{color:var(--accent);font-weight:600}
+  .pop .sep{height:1px;background:var(--border);margin:4px 2px}
+  .pop .it.dis{color:#b6bcc4;cursor:default}
+  .pop .it.dis:hover{background:transparent}
+  .pop label.chk{display:flex;align-items:center;gap:8px;padding:5px 10px;
+    border-radius:4px;cursor:pointer;white-space:nowrap}
+  .pop label.chk:hover{background:#eef2f8}
+  .pop label.chk input{accent-color:var(--accent)}
+  .pop .hd{display:flex;gap:8px;padding:4px 6px 6px;color:var(--dim)}
+  .pop .hd button{flex:1;border:1px solid var(--border);background:#fff;
+    border-radius:4px;padding:3px 0;font:inherit;cursor:pointer;color:var(--text)}
+  .pop .hd button:hover{background:#f2f5f9}
+
+  /* 下拉顶上的搜索框：粘在面板顶部，滚列表时它不走 */
+  .pop .popsearch{position:sticky;top:-4px;z-index:2;display:flex;
+    align-items:center;gap:2px;margin:-4px -4px 4px;padding:5px 6px;
+    background:#fff;border-bottom:1px solid var(--border);
+    border-radius:6px 6px 0 0}
+  .pop .popsearch input{flex:1 1 auto;width:170px;min-width:0;height:24px;
+    padding:0 7px;border:1px solid #cfd5dd;border-radius:4px;background:#fff;
+    color:var(--text);font:inherit;outline:none}
+  .pop .popsearch input:focus{border-color:var(--accent);
+    box-shadow:0 0 0 2px rgba(47,111,235,.12)}
+  .pop .popsearch .x{display:none;border:0;background:transparent;color:var(--dim);
+    font:inherit;font-size:12px;line-height:1;padding:3px 4px;cursor:pointer}
+  .pop .popsearch.has .x{display:block}
+  .pop .popsearch .x:hover{color:var(--text)}
+  .pop .it mark{background:#ffe680;color:inherit;border-radius:2px;padding:0 1px}
+  /* 上下键选中的那一行（跟"当前工作表"的 .on 是两回事） */
+  .pop .it.cur{background:#e8eefb;box-shadow:inset 0 0 0 1px rgba(47,111,235,.28)}
+
+  /* ---------- 单元格全文 ---------- */
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.28);display:none;
+    align-items:center;justify-content:center;z-index:60}
+  .modal.show{display:flex}
+  .modal .box{width:min(720px,80vw);max-height:70vh;background:#fff;
+    border-radius:8px;box-shadow:0 20px 60px rgba(15,23,42,.28);
+    display:flex;flex-direction:column;overflow:hidden}
+  .modal .hd{padding:10px 14px;border-bottom:1px solid var(--border);
+    color:var(--dim);font-size:11.5px;display:flex}
+  .modal pre{margin:0;padding:14px;overflow:auto;white-space:pre-wrap;
+    word-break:break-word;font:12.5px/1.65 "Consolas","Microsoft YaHei UI",monospace}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="bar">
+    <button class="btn" id="btnRecent">历史 <span class="caret">▾</span></button>
+    <button class="btn" id="btnPick">选择文件</button>
+    <button class="btn" id="btnExcel" disabled>打开文件</button>
+    <div class="title" id="title"></div>
+  </div>
+  <div class="bar2">
+    <span class="lbl" id="lblSheet" style="display:none">工作表</span>
+    <button class="dd" id="btnSheet" style="display:none">
+      <span id="sheetText">—</span><i>▾</i></button>
+    <span class="lbl">列</span>
+    <button class="dd" id="btnCols"><span id="colsText">全部</span><i>▾</i></button>
+    <div class="grow"></div>
+    <label class="switch" title="搜索整个文件的所有工作表">
+      <input type="checkbox" id="chkAll" checked><span class="track"></span>
+      <span>全部表</span>
+    </label>
+    <div class="search" id="searchBox">
+      <input id="q" placeholder="搜索…" spellcheck="false" autocomplete="off">
+      <button class="clr" id="qClr" title="清空">✕</button>
+    </div>
+  </div>
+  <div id="wrap">
+    <div id="grid" tabindex="0">
+      <div id="head"></div>
+      <div id="body"><div id="win"></div></div>
+      <div id="empty">
+        <div class="t" id="emptyTitle">打开一个表格看看</div>
+        <div class="h" id="emptyHint"></div>
+        <button id="emptyBtn">选择文件</button>
+      </div>
+    </div>
+  </div>
+  <div class="status">
+    <span id="stLeft"></span><span class="grow"></span><span id="stRight"></span>
+  </div>
+</div>
+<div class="pop" id="pop"></div>
+<div class="modal" id="modal"><div class="box">
+  <div class="hd" id="modalHd"></div><pre id="modalBd"></pre>
+</div></div>
+
+<script>
+"use strict";
+/* 出错别静默：报到后端日志里，方便排查 */
+function report(msg) {
+  try { fetch("/api/log?msg=" + encodeURIComponent(String(msg))); } catch (e) {}
+}
+window.addEventListener("error", e =>
+  report("JS-ERROR " + e.message + " @" + e.filename + ":" + e.lineno));
+window.addEventListener("unhandledrejection", e =>
+  report("JS-REJECT " + (e.reason && e.reason.message || e.reason)));
+/* ------------------------------------------------------------------ 状态 */
+const $ = s => document.querySelector(s);
+const grid = $("#grid"), head = $("#head"), body = $("#body"), win = $("#win");
+const stLeft = $("#stLeft"), stRight = $("#stRight");
+
+let S = null;                 // 后端 meta
+let rev = -1;                 // 当前渲染的版本号
+let cache = new Map();        // pageIndex -> rows
+let pending = new Set();
+let pool = [];                // 复用的行元素
+let firstIdx = -1;            // 当前窗口第一行的下标
+let sel = null;               // {ar, ac, fr, fc}
+let dragging = false;
+let rowh = 26, pageSize = 2000, total = 0;
+let headSig = "";
+let landIdx = -1;             // 跳转落地的行下标（高亮常驻，直到换数据）
+
+/* ------------------------------------------------------------------ 工具 */
+const esc = t => String(t ?? "").replace(/[&<>"]/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function api(path, opt) {
+  const r = await fetch(path, opt);
+  if (!r.ok) {
+    let msg = r.status + "";
+    try { msg = (await r.json()).error || msg; } catch (e) {}
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+/* ------------------------------------------------------- 虚拟滚动的渲染 */
+function rowCount() { return total; }
+
+function ensurePage(pi) {
+  if (cache.has(pi) || pending.has(pi)) return;
+  const pageRequests = pending;
+  pageRequests.add(pi);
+  api(`/api/rows?start=${pi * pageSize}&count=${pageSize}`)
+    .then(d => {
+      // 换表、排序或切列后，旧视图的回包不能覆盖新视图的数据。
+      if (pageRequests !== pending) return;
+      cache.set(pi, d.rows);
+      pageRequests.delete(pi);
+      // 只有当前可见范围用得上才重画，别为了远处的预取白跑一趟
+      const lo = Math.floor(firstIdx / pageSize), hi = lo + 1;
+      if (pi >= lo - 1 && pi <= hi + 1) paint();
+    })
+    .catch(() => pageRequests.delete(pi));
+}
+
+function getRow(i) {
+  const pi = Math.floor(i / pageSize);
+  const arr = cache.get(pi);
+  if (!arr) { ensurePage(pi); return null; }
+  return arr[i - pi * pageSize] || null;
+}
+
+/* 列类型 -> 类名。跳转列的 .sheet 是点击事件的唯一抓手，
+   早先这里一律只写 "cell"，于是「→ 工作表」根本点不动（.cell.sheet 匹配不到），
+   行号列也拿不到 .no 的灰字右对齐。 */
+const KIND_CLASS = {sheet: " sheet", no: " no"};
+
+function makeRow(ncol) {
+  const el = document.createElement("div");
+  el.className = "row";
+  for (let k = 0; k < ncol; k++) {
+    const c = document.createElement("div");
+    const spec = S && S.cols[k];
+    c.className = "cell" + (spec ? (KIND_CLASS[spec.kind] || "") : "");
+    c.dataset.c = k;
+    if (spec) {
+      c.style.width = spec.w + "px";
+      c.style.flex = `0 0 ${spec.w}px`;
+    }
+    el.appendChild(c);
+  }
+  win.appendChild(el);
+  return el;
+}
+
+/* 列宽必须同时刷到表头和数据行，否则会错位 */
+function syncWidths() {
+  if (!S) return;
+  const specs = S.cols;
+  for (const row of [head, ...pool]) {
+    const cells = row.children;
+    for (let k = 0; k < cells.length && k < specs.length; k++) {
+      const c = cells[k], w = specs[k].w + "px";
+      if (c.style.width !== w) {
+        c.style.width = w;
+        c.style.flex = `0 0 ${w}`;
+      }
+    }
+  }
+}
+
+function buildHead() {
+  head.innerHTML = "";
+  for (const c of S.cols) {
+    const d = document.createElement("div");
+    // 表头也带上列类型：行号列的「#」跟下面的数字一样右对齐
+    d.className = "cell" + (c.kind === "cell" ? "" : " static")
+                + (c.kind === "no" ? " no" : "");
+    d.style.width = c.w + "px";
+    d.style.flex = `0 0 ${c.w}px`;
+    d.dataset.key = c.key;
+    if (c.kind === "cell") {
+      d.dataset.col = c.i;
+      d.title = c.name + "（点击排序）";
+    }
+    const t = document.createElement("div");
+    t.className = "h";
+    t.textContent = c.name;
+    d.appendChild(t);
+    head.appendChild(d);
+  }
+  // 行元素跟着列数重建
+  win.innerHTML = "";
+  pool = [];
+}
+
+function inSel(i, k) {
+  if (!sel) return false;
+  const r0 = Math.min(sel.ar, sel.fr), r1 = Math.max(sel.ar, sel.fr);
+  const c0 = Math.min(sel.ac, sel.fc), c1 = Math.max(sel.ac, sel.fc);
+  return i >= r0 && i <= r1 && k >= c0 && k <= c1;
+}
+
+function fill(el, i) {
+  const data = getRow(i);
+  const has = data !== null;
+  // 数据还没到的时候先画空行，等这批数据到了要能重画一次
+  if (el._i === i && el._rev === rev && el._has === has) return;
+  // 行的位置相对于整个表体，只有换绑到另一行时才移动。
+  if (el._i !== i) el.style.top = (i * rowh) + "px";
+  el._i = i; el._rev = rev; el._has = has;
+  el.classList.toggle("stripe", i % 2 === 1);
+  const cells = el.children;
+  for (let k = 0; k < cells.length; k++) {
+    const c = cells[k], spec = S.cols[k];
+    const v = data ? data[k] : "";
+    if (spec.kind === "sheet") {
+      // 只有全表搜索才把工作表名跟在箭头后面；单表搜索就一个「→ 前往」
+      c.innerHTML = data
+        ? `<span class="go">→</span>${S.leadName ? esc(v) : ""}`
+        : "";
+      c.title = data ? (S.leadName ? "跳到这个工作表" : "跳到这一行") : "";
+    } else {
+      if (c.textContent !== String(v)) c.textContent = v;
+      c.title = v && String(v).length > 14 ? String(v) : "";
+    }
+    c.classList.toggle("sel", inSel(i, k));
+  }
+}
+
+function recycleRows(start) {
+  const shift = start - firstIdx;
+  if (firstIdx < 0 || Math.abs(shift) >= pool.length) return;
+  // 把离开缓冲区的节点移到另一端，重叠的行继续对应原来的数据。
+  if (shift > 0) {
+    const rows = pool.splice(0, shift);
+    pool.push(...rows);
+    win.append(...rows);
+  } else {
+    const rows = pool.splice(shift);
+    pool.unshift(...rows);
+    win.prepend(...rows);
+  }
+}
+
+function paint() {
+  if (!S || S.empty) return;
+  const top = grid.scrollTop;
+  const start = Math.max(0, Math.floor(top / rowh) - 2);
+  const end = Math.min(total, start + pool.length);
+
+  if (start !== firstIdx) {
+    recycleRows(start);
+    firstIdx = start;
+  }
+  for (let n = 0; n < pool.length; n++) {
+    const i = start + n;
+    const el = pool[n];
+    if (i >= end) { if (el.style.display !== "none") el.style.display = "none"; continue; }
+    if (el.style.display === "none") el.style.display = "";
+    fill(el, i);
+    // 落地高亮放在 paint 里刷：fill 有"内容没变就不动"的短路，会漏掉
+    const land = i === landIdx;
+    if (el.classList.contains("land") !== land) el.classList.toggle("land", land);
+  }
+  // 预取下一屏，滚起来不断粮
+  const lastPage = Math.floor(Math.max(0, end - 1) / pageSize);
+  ensurePage(lastPage);
+  ensurePage(lastPage + 1);
+}
+
+let rafId = 0;
+function schedule() {
+  if (rafId) return;
+  rafId = requestAnimationFrame(() => { rafId = 0; paint(); });
+}
+grid.addEventListener("scroll", schedule, {passive: true});
+window.addEventListener("resize", () => { buildPoolSize(); schedule(); });
+
+function buildPoolSize() {
+  if (!S || S.empty) return;
+  const need = Math.ceil(grid.clientHeight / rowh) + 6;
+  if (pool.length === need) return;
+  while (pool.length < need) pool.push(makeRow(S.cols.length));
+  while (pool.length > need) { pool.pop().remove(); }
+  firstIdx = -1;
+}
+
+/* -------------------------------------------------------------- meta 应用 */
+function applyMeta(m) {
+  const changed = m.rev !== rev;
+  S = m;
+  window.__state = m;            // 自检 / 调试用
+  applyKeys(m);
+  rowh = m.rowh || 26;
+  pageSize = m.page || 2000;
+  document.documentElement.style.setProperty("--rowh", rowh + "px");
+
+  const appName = m.app || "Excel 数据查看器";
+  $("#title").textContent = m.name || "";
+  document.title = m.name ? `${m.name} - ${appName}` : appName;
+  $("#btnExcel").disabled = !m.path;
+
+  // 工作表下拉
+  const manySheets = (m.sheets || []).length > 1;
+  $("#lblSheet").style.display = manySheets ? "" : "none";
+  $("#btnSheet").style.display = manySheets ? "" : "none";
+  if (manySheets) $("#sheetText").textContent = m.sheet || m.sheets[0];
+
+  // 全部表开关 / 搜索框
+  $("#chkAll").checked = (m.scope || "all") === "all";
+  if (document.activeElement !== $("#q")) {
+    $("#q").value = m.query || "";
+  }
+  $("#searchBox").classList.toggle("has", !!($("#q").value));
+
+  // 列
+  const nAll = (m.all_cols || []).length;
+  const nVis = (m.visible_cols || []).length;
+  $("#colsText").textContent =
+    nVis >= nAll ? "全部" : (nVis === 0 ? "无" : `${nVis}/${nAll}`);
+
+  if (m.loading) { setStatus("正在读取…", ""); }
+
+  if (m.empty) {
+    total = 0;
+    head.innerHTML = ""; win.innerHTML = ""; pool = [];
+    body.style.height = "0px";
+    showEmpty(m);
+    return;
+  }
+  hideEmpty();
+
+  total = m.total || 0;
+  if (changed) {
+    cache.clear();
+    pending = new Set();
+    rev = m.rev;
+    landIdx = -1;                        // 换了数据（搜索 / 换表 / 换文件 / 排序），旧落点失效
+  }
+  const sig = m.cols.map(c => c.key).join("|");
+  if (sig !== headSig || head.children.length !== m.cols.length) {
+    headSig = sig;
+    buildHead();
+  } else {
+    // 列宽/标题可能变了（排序箭头），只更新表头文字
+    const cells = head.children;
+    for (let k = 0; k < cells.length; k++) {
+      const spec = m.cols[k];
+      cells[k].style.width = spec.w + "px";
+      cells[k].style.flex = `0 0 ${spec.w}px`;
+      cells[k].querySelector(".h").textContent = spec.name;
+    }
+  }
+  body.style.height = Math.max(0, total * rowh) + "px";
+  syncWidths();
+  buildPoolSize();
+  firstIdx = -1;
+  paint();
+  updateStatus();
+
+  // 自检：搜索出结果后跑一次「点单元格 -> Ctrl+C」的回归用例
+  // （曾经因为 mousedown 里的 preventDefault，焦点留在搜索框，Ctrl+C 被吃掉）
+  if (SELFTEST && m.query && total > 0
+      && !window.__copyTest && !window.__copyTestPending) {
+    window.__copyTestPending = 1;
+    setTimeout(selftestCopy, 500);
+  }
+}
+
+function showEmpty(m) {
+  const box = $("#empty");
+  box.classList.add("show");
+  if (m.error) {
+    $("#emptyTitle").textContent = "没能打开";
+    $("#emptyHint").textContent = m.error;
+    $("#emptyHint").classList.add("err");
+    $("#emptyBtn").style.display = "none";
+  } else if (m.loading) {
+    $("#emptyTitle").textContent = "正在读取…";
+    $("#emptyHint").textContent = m.path || "";
+    $("#emptyHint").classList.remove("err");
+    $("#emptyBtn").style.display = "none";
+  } else {
+    $("#emptyTitle").textContent = "打开一个表格看看";
+    $("#emptyHint").textContent =
+      "支持 .xlsx / .xlsm / .csv / .tsv　　只读查看，不会改动原文件";
+    $("#emptyHint").classList.remove("err");
+    $("#emptyBtn").style.display = "";
+  }
+}
+function hideEmpty() { $("#empty").classList.remove("show"); }
+
+function setStatus(left, right) {
+  stLeft.innerHTML = left || "";
+  stRight.innerHTML = right || "";
+}
+
+function updateStatus() {
+  if (!S || S.empty) { setStatus(S && S.error ? "打开失败" : "", ""); return; }
+  const st = S.stats || {};
+  let left;
+  if (st.truncated) {
+    left = `已读取 ${st.nrows.toLocaleString()} 行（文件更大，仅显示前 20 万行）　·　${st.elapsed}s`;
+  } else {
+    // 全表搜索会把别的表的列并进来，实际显示的列数可能多于当前表
+    const more = (S.layoutCols && S.layoutCols > st.ncols)
+      ? `（合并显示 ${S.layoutCols} 列）` : "";
+    left = `<b>${st.nrows.toLocaleString()}</b> 行 × <b>${st.ncols}</b> 列${more}　·　读取 ${st.elapsed}s　·　只读模式`;
+  }
+  if (S.query) left += `　·　匹配 <b>${total.toLocaleString()}</b> 行`;
+  let right = "";
+  if (sel) {
+    const r = Math.abs(sel.fr - sel.ar) + 1, c = Math.abs(sel.fc - sel.ac) + 1;
+    const key = (S.shortcuts && S.shortcuts.copy) || "Ctrl+C";
+    right = `已选 ${r} 行 × ${c} 列　·　${key} 复制`;
+  }
+  setStatus(left, right);
+}
+
+/* ------------------------------------------------------------------ 选择 */
+function cellAt(target) {
+  const cell = target.closest(".cell");
+  if (!cell || !cell.parentElement.classList.contains("row")) return null;
+  const rowEl = cell.parentElement;
+  if (rowEl._i === undefined) return null;
+  return { r: rowEl._i, c: +cell.dataset.c };
+}
+
+win.addEventListener("mousedown", e => {
+  if (e.button !== 0) return;
+  const p = cellAt(e.target);
+  if (!p) return;
+  if (e.target.closest(".cell.sheet")) return;   // 让跳转自己处理
+  sel = {ar: p.r, ac: p.c, fr: p.r, fc: p.c};
+  dragging = true;
+  refreshSel();
+  // preventDefault 顺手把浏览器默认的「点哪聚焦哪」也拦了，焦点还留在搜索框里，
+  // 于是 Ctrl+C 被输入框吃掉，单元格复制不了。这里手动把焦点还给表格。
+  focusGrid();
+  e.preventDefault();
+});
+
+window.addEventListener("mousemove", e => {
+  if (!dragging) return;
+  if (e.target.closest && e.target.closest("#grid") === null) return;
+  const p = cellAt(e.target);
+  if (!p) return;
+  if (p.r === sel.fr && p.c === sel.fc) return;
+  sel.fr = p.r; sel.fc = p.c;
+  refreshSel();
+});
+
+window.addEventListener("mouseup", () => { dragging = false; });
+
+function refreshSel() {
+  for (const el of pool) {
+    if (el._i === undefined) continue;
+    for (const c of el.children) c.classList.toggle("sel", inSel(el._i, +c.dataset.c));
+  }
+  updateStatus();
+}
+
+function clearSel() { sel = null; refreshSel(); }
+
+grid.addEventListener("dblclick", async e => {
+  const p = cellAt(e.target);
+  if (!p) return;
+  try {
+    const d = await api(`/api/cell?r=${p.r}&c=${p.c}`);
+    $("#modalHd").textContent = `第 ${p.r + 1} 条显示行 · 第 ${p.c + 1} 列`;
+    $("#modalBd").textContent = d.text || "（空）";
+    $("#modal").classList.add("show");
+  } catch (err) {}
+});
+
+$("#modal").addEventListener("click", () => $("#modal").classList.remove("show"));
+
+/* 全表搜索里点「→ 工作表」：切到那个表并滚到那一行 */
+win.addEventListener("click", async e => {
+  const cell = e.target.closest(".cell.sheet");
+  if (!cell) return;
+  const rowEl = cell.parentElement;
+  if (!rowEl || rowEl._i === undefined) return;
+  const data = getRow(rowEl._i);
+  if (!data) return;                       // 这一页还没取回来，先不做事，别报错
+  const [sheet, rowno] = data;
+  try {
+    const d = await api(`/api/jump?sheet=${encodeURIComponent(sheet)}&row=${rowno}`);
+    // 跳转后查询已清空，把搜索框一起收干净（焦点可能还留在框里，
+    // applyMeta 见输入框有焦点就不敢改它的值，得手动清）
+    $("#q").value = "";
+    $("#searchBox").classList.remove("has");
+    sel = null;                            // 旧的选区下标对应的是搜索结果的，作废
+    applyMeta(d.state);
+    grid.scrollTop = Math.max(0, (d.index - 3) * rowh);
+    landIdx = d.index;                     // 落地高亮常驻，不闪一下就消失
+    schedule();
+    focusGrid();
+  } catch (err) {
+    setStatus(stLeft.innerHTML, "跳转失败：" + err.message);
+    report("JUMP fail " + err.message);
+  }
+});
+
+/* ------------------------------------------------------------------ 复制 */
+async function copySel() {
+  if (!sel) return;
+  const r0 = Math.min(sel.ar, sel.fr), r1 = Math.max(sel.ar, sel.fr);
+  const c0 = Math.min(sel.ac, sel.fc), c1 = Math.max(sel.ac, sel.fc);
+  try {
+    const d = await api(`/api/range?r0=${r0}&r1=${r1}&c0=${c0}&c1=${c1}`);
+    const ok = await writeClipboard(d.text || "");
+    if (ok) {
+      setStatus(stLeft.innerHTML, `已复制 ${d.rows} 行 × ${d.cols} 列到剪贴板`);
+    } else {
+      setStatus(stLeft.innerHTML, "复制失败：剪贴板不可用");
+      report("COPY fail clipboard");
+    }
+  } catch (err) {
+    setStatus(stLeft.innerHTML, "复制失败：" + err.message);
+    report("COPY fail " + err.message);
+  }
+}
+
+async function writeClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e2) {}
+    ta.remove();
+    return ok;
+  }
+}
+
+/* ------------------------------------------------------------------ 表头 */
+head.addEventListener("click", async e => {
+  const cell = e.target.closest(".cell");
+  if (!cell || cell.dataset.col === undefined) return;
+  try { applyMeta(await api(`/api/sort?col=${cell.dataset.col}`)); } catch (err) {}
+});
+
+/* ------------------------------------------------------------------ 下拉 */
+const pop = $("#pop");
+let popFor = null;
+
+function closePop() {
+  pop.classList.remove("show");
+  popFor = null;
+}
+document.addEventListener("mousedown", e => {
+  if (pop.contains(e.target)) return;
+  if (e.target.closest(".dd") || e.target.closest("#btnRecent")) return;
+  closePop();
+});
+
+function openPop(anchor, build) {
+  if (popFor === anchor && pop.classList.contains("show")) { closePop(); return; }
+  pop.innerHTML = "";
+  build(pop);
+  pop.classList.add("show");
+  const r = anchor.getBoundingClientRect();
+  const w = pop.offsetWidth, h = pop.offsetHeight;
+  let x = r.left, y = r.bottom + 4;
+  if (x + w > innerWidth - 8) x = Math.max(8, innerWidth - w - 8);
+  if (y + h > innerHeight - 8) y = Math.max(8, r.top - h - 4);
+  pop.style.left = x + "px";
+  pop.style.top = y + "px";
+  popFor = anchor;
+}
+
+function item(text, onClick, on) {
+  const d = document.createElement("div");
+  d.className = "it" + (on ? " on" : "");
+  d.textContent = text;
+  d.addEventListener("click", () => { closePop(); onClick(); focusGrid(); });
+  return d;
+}
+
+/* ------------------------------------------------------- 名字模糊匹配 */
+/* 先找整段连续命中（"销售" 命中 "销售明细"），找不到再退一步允许字符
+   按顺序散落（"销明" 也能命中）。查询里有空格就拆成几个词，每个词都得中。
+   返回 {score, marks}，marks 是逐字是否命中的标记，用来在结果里高亮。 */
+function fuzzyName(name, query) {
+  const low = name.toLowerCase();
+  const marks = new Array(name.length).fill(false);
+  const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  let score = 0;
+
+  for (const term of terms) {
+    const at = low.indexOf(term);
+    if (at >= 0) {
+      score += 1000 - at * 2 - name.length;   // 越靠前、名字越短越优先
+      for (let k = at; k < at + term.length; k++) marks[k] = true;
+      continue;
+    }
+    let p = 0, first = -1, last = -1;
+    for (const ch of term) {
+      const j = low.indexOf(ch, p);
+      if (j < 0) return null;                 // 这个字根本没有，整个词就不算命中
+      if (first < 0) first = j;
+      last = j;
+      p = j + 1;
+      marks[j] = true;
+    }
+    score += 300 - (last - first) * 3 - first * 2;   // 命中越紧凑、越靠前越好
+  }
+  return {score, marks};
+}
+
+/* 把命中的字包上 <mark>，其余原样转义 */
+function markHL(text, marks) {
+  if (!marks) return esc(text);
+  let out = "", on = false;
+  for (let i = 0; i < text.length; i++) {
+    if (marks[i] && !on) { out += "<mark>"; on = true; }
+    else if (!marks[i] && on) { out += "</mark>"; on = false; }
+    out += esc(text[i]);
+  }
+  return on ? out + "</mark>" : out;
+}
+
+$("#btnRecent").addEventListener("click", e => {
+  const btn = e.currentTarget;
+  openPop(btn, box => {
+    const recent = (S && S.recent) || [];
+    if (!recent.length) {
+      const d = document.createElement("div");
+      d.className = "it dis";
+      d.textContent = "（还没有打开过文件）";
+      box.appendChild(d);
+      return;
+    }
+    for (const p of recent) {
+      const name = p.split(/[\\/]/).pop();
+      const d = item(name, () => openPath(p), S && p === S.path);
+      d.title = p;
+      box.appendChild(d);
+    }
+    const sep = document.createElement("div");
+    sep.className = "sep";
+    box.appendChild(sep);
+    box.appendChild(item("清空列表", async () => {
+      try { applyMeta(await api("/api/recent/clear")); } catch (err) {}
+    }));
+  });
+});
+
+$("#btnSheet").addEventListener("click", e => {
+  const btn = e.currentTarget;
+  openPop(btn, box => buildSheetPop(box));
+});
+
+/* 工作表下拉：顶上一条搜索框，边打边过滤；↑↓ 选行，Enter 跳过去。
+   表多的时候（几十上百个 Sheet）不用再一个个往下翻。 */
+function buildSheetPop(box) {
+  const names = S.sheets || [];
+
+  const bar = document.createElement("div");
+  bar.className = "popsearch";
+  const inp = document.createElement("input");
+  inp.type = "text";
+  inp.placeholder = "搜索工作表…";
+  inp.spellcheck = false;
+  inp.autocomplete = "off";
+  const clr = document.createElement("button");
+  clr.type = "button";
+  clr.className = "x";
+  clr.title = "清空";
+  clr.textContent = "✕";
+  bar.append(inp, clr);
+  box.appendChild(bar);
+
+  const list = document.createElement("div");
+  box.appendChild(list);
+
+  let hits = [];          // 当前过滤结果，顺序就是屏幕上从上到下
+  let els = [];           // 与 hits 一一对应的行元素
+  let cur = 0;            // 上下键选中的下标（不是"当前工作表"）
+
+  /* 选中行必须露出来：面板本身是滚动容器，搜索框还吸在顶上，
+     所以按「可视区顶边 + 搜索框高度」来算该滚多少，别用 scrollIntoView
+     （那玩意儿会把滚到吸顶框底下藏起来）。 */
+  function ensureVisible(el) {
+    if (!el || !box.classList.contains("show")) return;
+    const br = box.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    const top = br.top + bar.offsetHeight + 2;
+    if (er.top < top) box.scrollTop -= (top - er.top);
+    else if (er.bottom > br.bottom - 2) box.scrollTop += (er.bottom - br.bottom + 2);
+  }
+
+  function paintCur(show) {
+    for (let i = 0; i < els.length; i++) els[i].classList.toggle("cur", i === cur);
+    if (show) ensureVisible(els[cur]);
+  }
+
+  function move(step) {
+    if (!els.length) return;
+    cur = (cur + step + els.length) % els.length;   // 到头了绕回去
+    paintCur(true);
+  }
+
+  function render() {
+    const q = inp.value.trim();
+    bar.classList.toggle("has", !!inp.value);
+    list.innerHTML = "";
+    hits = [];
+    els = [];
+
+    for (const name of names) {
+      const f = q ? fuzzyName(name, q) : {score: 0, marks: null};
+      if (f) hits.push({name: name, score: f.score, marks: f.marks});
+    }
+    // 没输入就按原表顺序；有输入按相关度排
+    if (q) hits.sort((a, b) => b.score - a.score ||
+                                a.name.localeCompare(b.name, "zh"));
+
+    if (!hits.length) {
+      const d = document.createElement("div");
+      d.className = "it dis";
+      d.textContent = "没有匹配的工作表";
+      list.appendChild(d);
+      cur = 0;
+      return;
+    }
+    for (const h of hits) {
+      const d = document.createElement("div");
+      d.className = "it" + (h.name === S.sheet ? " on" : "");
+      d.title = h.name;
+      d.innerHTML = markHL(h.name, h.marks);
+      d.addEventListener("click", () => {
+        closePop();
+        pickSheet(h.name);
+        focusGrid();
+      });
+      list.appendChild(d);
+      els.push(d);
+    }
+    if (cur >= els.length) cur = 0;
+    paintCur(true);
+  }
+
+  let timer = 0;
+  /* 打字有 60ms 防抖；但回车/↑↓ 之前得把还没跑的那次过滤补上，
+     不然选的是上一轮的列表 */
+  function flush() {
+    clearTimeout(timer);
+    timer = 0;
+    cur = 0;
+    box.scrollTop = 0;
+    render();
+  }
+  inp.addEventListener("input", () => {
+    clearTimeout(timer);
+    timer = setTimeout(flush, 60);
+  });
+  inp.addEventListener("keydown", ev => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      if (timer) flush();
+      const hit = hits[cur] || hits[0];
+      if (hit) {
+        closePop();
+        pickSheet(hit.name);
+        focusGrid();
+      }
+      return;
+    }
+    if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+      ev.preventDefault();       // 别让 ↑↓ 去滚页面/挪光标
+      if (timer) flush();
+      move(ev.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
+    // 有词的时候 Esc 先清词，别一下把面板关了
+    if (ev.key === "Escape" && inp.value) {
+      ev.stopPropagation();
+      clearTimeout(timer);
+      timer = 0;
+      inp.value = "";
+      cur = 0;
+      render();
+    }
+  });
+  clr.addEventListener("click", () => {
+    clearTimeout(timer);
+    timer = 0;
+    inp.value = "";
+    cur = 0;
+    render();
+    inp.focus();
+  });
+
+  // 一打开就落在"当前工作表"上，直接按 ↑↓ 从这儿挪
+  const at = names.indexOf(S.sheet);
+  cur = at >= 0 && !inp.value ? at : 0;
+  render();
+  // 面板这时候才刚显示出来，等一帧再抢焦点，不然 focus() 落空
+  setTimeout(() => {
+    try { inp.focus({preventScroll: true}); } catch (err) {}
+    ensureVisible(els[cur]);
+  }, 0);
+}
+
+async function pickSheet(name) {
+  try { applyMeta(await api(`/api/sheet?name=${encodeURIComponent(name)}`)); }
+  catch (err) {}
+}
+
+$("#btnCols").addEventListener("click", e => {
+  const btn = e.currentTarget;
+  openPop(btn, box => {
+    const hd = document.createElement("div");
+    hd.className = "hd";
+    const bAll = document.createElement("button");
+    bAll.textContent = "全部显示";
+    const bNone = document.createElement("button");
+    bNone.textContent = "全部隐藏";
+    hd.append(bAll, bNone);
+    box.appendChild(hd);
+
+    const list = document.createElement("div");
+    for (const c of (S.all_cols || [])) {
+      const lab = document.createElement("label");
+      lab.className = "chk";
+      const cb = document.createElement("input");
+      cb.type = "checkbox";
+      cb.checked = (S.visible_cols || []).includes(c.i);
+      cb.addEventListener("change", async () => {
+        const on = [...box.querySelectorAll("input:checked")].map(x => x.dataset.i);
+        if (!on.length) { cb.checked = true; return; }
+        try { applyMeta(await api(`/api/cols?list=${on.join(",")}`)); } catch (err) {}
+        // 面板保持打开，可以连着勾几个
+        setTimeout(() => { if (pop.classList.contains("show")) {
+          for (const x of box.querySelectorAll("input")) {
+            x.checked = (S.visible_cols || []).includes(+x.dataset.i);
+          }
+        } }, 0);
+      });
+      cb.dataset.i = c.i;
+      lab.append(cb, document.createTextNode(c.name));
+      list.appendChild(lab);
+    }
+    box.appendChild(list);
+    bAll.addEventListener("click", async () => {
+      const all = (S.all_cols || []).map(c => c.i).join(",");
+      try { applyMeta(await api(`/api/cols?list=${all}`)); } catch (err) {}
+      for (const x of box.querySelectorAll("input")) x.checked = true;
+    });
+    bNone.addEventListener("click", async () => {
+      const first = (S.all_cols || [])[0];
+      if (!first) return;
+      try { applyMeta(await api(`/api/cols?list=${first.i}`)); } catch (err) {}
+      for (const x of box.querySelectorAll("input")) x.checked = +x.dataset.i === first.i;
+    });
+  });
+});
+
+/* ------------------------------------------------------------------ 动作 */
+async function openPath(p) {
+  try {
+    applyMeta(await api(`/api/open?path=${encodeURIComponent(p)}`));
+    focusGrid();
+  } catch (err) {}
+}
+
+$("#btnPick").addEventListener("click", async () => {
+  try {
+    const d = await api("/api/pick");
+    if (d.path) await openPath(d.path);
+  } catch (err) {}
+});
+
+$("#btnExcel").addEventListener("click", () => { api("/api/excel").catch(() => {}); });
+$("#emptyBtn").addEventListener("click", () => $("#btnPick").click());
+
+$("#chkAll").addEventListener("change", async e => {
+  const mode = e.target.checked ? "all" : "sheet";
+  try { applyMeta(await api(`/api/scope?mode=${mode}`)); } catch (err) {}
+  focusGrid();
+});
+
+let qTimer = 0;
+$("#q").addEventListener("input", () => {
+  const v = $("#q").value;
+  $("#searchBox").classList.toggle("has", !!v);
+  clearTimeout(qTimer);
+  qTimer = setTimeout(async () => {
+    try { applyMeta(await api(`/api/search?q=${encodeURIComponent(v)}`)); }
+    catch (err) {}
+  }, 160);
+});
+$("#q").addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    e.stopPropagation();
+    escFromInput();
+  }
+});
+$("#qClr").addEventListener("click", () => {
+  $("#q").value = "";
+  $("#searchBox").classList.remove("has");
+  $("#q").dispatchEvent(new Event("input"));
+  $("#q").focus();
+});
+
+/* ------------------------------------------------------------------ 焦点 */
+/* 窗口被呼出 / 从别的程序切回来时，把键盘焦点交给表格，
+   这样 Ctrl+F、方向键、Ctrl+C 不用先点一下表格 */
+function focusGrid() {
+  if (!grid) return;
+  try { grid.focus({preventScroll: true}); } catch (e) { grid.focus(); }
+}
+window.addEventListener("focus", () => {
+  const ae = document.activeElement;
+  if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA")) return;
+  focusGrid();
+});
+document.addEventListener("mousedown", e => {
+  // 点空白处（不是按钮/输入框/下拉）也把焦点收回表格
+  if (e.target.closest(".btn,.dd,.switch,.search,.pop,.modal")) return;
+  if (e.target.closest("#grid")) return;
+  setTimeout(focusGrid, 0);
+});
+
+/* ------------------------------------------------- 快捷键（来自 config.json） */
+/* 键位不写死在页面里：后端把 config.json 的 shortcuts 一起塞进 meta，
+   这里解析成 {ctrl,alt,shift,meta,key} 再和 keydown 事件比对。
+   注意 MODS 要映射到 acc 的字段名（ctrl/alt/shift/meta），不是事件里的 ctrlKey ——
+   早先错写成 ctrlKey，解析出来的 acc.ctrl 永远是 false，
+   于是 "Ctrl+F" 这类带修饰键的快捷键全部匹配不上。 */
+const MODS = {ctrl: "ctrl", control: "ctrl", alt: "alt", shift: "shift",
+              win: "meta", meta: "meta", super: "meta", cmd: "meta"};
+const KEYNAME = {esc: "escape", escape: "escape", return: "enter", space: " ",
+                 del: "delete", ins: "insert", pgup: "pageup", pgdn: "pagedown",
+                 up: "arrowup", down: "arrowdown", left: "arrowleft", right: "arrowright"};
+
+function parseSpec(spec) {
+  if (!spec || typeof spec !== "string") return null;
+  const acc = {ctrl: false, alt: false, shift: false, meta: false, key: ""};
+  for (const raw of spec.split("+")) {
+    const t = raw.trim().toLowerCase();
+    if (!t) continue;
+    if (MODS[t]) acc[MODS[t]] = true;
+    else acc.key = KEYNAME[t] || t;
+  }
+  return acc.key ? acc : null;
+}
+
+function matchSpec(e, acc) {
+  if (!acc) return false;
+  const k = (e.key || "").toLowerCase();
+  const code = (e.code || "").toLowerCase();
+  let hit = k === acc.key || code === acc.key;
+  if (!hit && /^[0-9]$/.test(acc.key)) {
+    hit = code === "digit" + acc.key || code === "numpad" + acc.key;
+  }
+  if (!hit) return false;
+  return !!e.ctrlKey === acc.ctrl && !!e.altKey === acc.alt
+      && !!e.shiftKey === acc.shift && !!e.metaKey === acc.meta;
+}
+
+let keys = {};
+function applyKeys(m) {
+  const sc = (m && m.shortcuts) || {};
+  keys = {};
+  for (const name of Object.keys(sc)) keys[name] = parseSpec(sc[name]);
+}
+
+function selectAll() {
+  if (!total || !S) return;
+  sel = {ar: 0, ac: 0, fr: total - 1, fc: (S.cols.length - 1)};
+  refreshSel();
+}
+
+const ACTIONS = {
+  open: () => $("#btnPick").click(),
+  search: () => focusSearch(),
+  reload: () => { api("/api/reload").then(applyMeta).catch(() => {}); },
+  selectAll: selectAll,
+  copy: () => { window.__copyRan = (window.__copyRan || 0) + 1; copySel(); },
+};
+
+/* 把光标送进搜索框。
+   窗口刚被呼出 / 刚从别的程序切回来时，第一次 focus() 常常被系统吞掉
+   （文档还没拿到焦点，元素只是 activeElement，光标不出现），所以补几次；
+   顺带在文档没焦点时请后端把窗口顶到前台再试。 */
+function focusSearch(left) {
+  const q = $("#q");
+  if (!q) return;
+  left = (left === undefined) ? 4 : left;
+
+  try { window.focus(); } catch (e) {}
+  try { q.focus({preventScroll: true}); } catch (e) { q.focus(); }
+  try { q.select(); } catch (e) {}
+
+  if (document.activeElement === q && document.hasFocus()) return;
+
+  if (left <= 0) {
+    report("搜索框拿不到焦点 active=" +
+           ((document.activeElement && (document.activeElement.id ||
+             document.activeElement.tagName)) || "none") +
+           " hasFocus=" + document.hasFocus());
+    return;
+  }
+  if (!document.hasFocus() && left === 4) {
+    // 窗口不在前台：让后端抢一次前台，回来再 focus
+    fetch("/api/activate").catch(() => {});
+  }
+  setTimeout(() => focusSearch(left - 1), 70);
+}
+
+/* Esc 的退法：
+   config.json 里 "esc": "close"   -> 一步收起窗口（默认）
+   config.json 里 "esc": "layered" -> 一层一层退：弹窗 -> 下拉 -> 选区 -> 搜索 -> 收起 */
+function hideWindow() {
+  // 收起前把浮层收干净，不然下次叫出来弹窗还挂在上面
+  $("#modal").classList.remove("show");
+  closePop();
+  api("/api/hide").catch(() => {});
+}
+
+function handleEsc() {
+  if (S && S.esc === "close") { hideWindow(); return; }
+  if ($("#modal").classList.contains("show")) { $("#modal").classList.remove("show"); return; }
+  if (pop.classList.contains("show")) { closePop(); return; }
+  if (sel) { clearSel(); return; }
+  if (S && S.query) {
+    $("#q").value = ""; $("#searchBox").classList.remove("has");
+    api("/api/search?q=").then(m => { applyMeta(m); focusGrid(); }).catch(() => {});
+    return;
+  }
+  hideWindow();
+}
+
+/* 输入框里按 Esc 也走同一套退法：close 模式直接收窗口，
+   layered 模式只把焦点还给表格（别把刚敲的搜索词吃掉） */
+function escFromInput() {
+  if (S && S.esc === "close") { hideWindow(); return; }
+  $("#q").blur();
+  focusGrid();
+}
+
+document.addEventListener("keydown", e => {
+  const inInput = e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA";
+
+  for (const name in ACTIONS) {
+    if (!matchSpec(e, keys[name])) continue;
+    // 在输入框里只放行「跳到搜索框」，其余交给输入框自己。
+    // 例外：Ctrl+C —— 输入框里没选中文字、表格里却有选区时，复制的应该是表格
+    // （搜索完直接点单元格 / 焦点还在搜索框里，都得能复制出去）
+    if (inInput && name !== "search") {
+      if (name !== "copy" || !sel || hasTextSel(e.target)) continue;
+    }
+    // 先掐掉默认行为再动手：浏览器自带的 Ctrl+F 查找条会跟这里抢焦点
+    e.preventDefault();
+    ACTIONS[name]();
+    return;
+  }
+
+  if (matchSpec(e, keys.hide)) { e.preventDefault(); handleEsc(); }
+});
+
+function hasTextSel(el) {
+  try { return el.selectionStart !== el.selectionEnd; } catch (e) { return false; }
+}
+
+/* 滚轮：横向也给一点（Shift+滚轮） */
+grid.addEventListener("wheel", e => {
+  if (e.shiftKey && !e.ctrlKey) {
+    grid.scrollLeft += e.deltaY;
+    e.preventDefault();
+  }
+}, {passive: false});
+
+/* ------------------------------------------------------------------ 轮询 */
+async function sync() {
+  try {
+    const m = await api("/api/state");
+    if (!S || m.rev !== S.rev) applyMeta(m);
+    else if (m.loading !== S.loading) applyMeta(m);
+  } catch (err) {}
+  setTimeout(sync, 500);
+}
+
+/* ------------------------------------------------------------------ 启动 */
+/* 自检模式（--selftest）下把渲染结果回报给后端。
+   走"页面主动上报"而不是后端 evaluate_js，测到的就是真实渲染出来的 DOM。
+   启动后立刻报一次，之后每 0.7 秒一次。 */
+const SELFTEST = location.search.indexOf("selftest") >= 0;
+
+function sendProbe() {
+  if (!SELFTEST) return;
+  const row0 = document.querySelector("#win .row");
+  const probe = {
+    url: location.href,
+    title: document.title,
+    dpr: devicePixelRatio,
+    w: innerWidth, h: innerHeight,
+    rows: document.querySelectorAll("#win .row").length,
+    heads: document.querySelectorAll("#head .cell").length,
+    first: row0 ? row0.textContent : "",
+    status: (document.getElementById("stLeft") || {}).textContent || "",
+    right: (document.getElementById("stRight") || {}).textContent || "",
+    empty: document.getElementById("empty").className,
+    total: (S && S.total) || 0,
+    cols: (S && S.cols && S.cols.length) || 0,
+    query: (S && S.query) || "",
+    sort: (S && S.sort) || null,
+    shortcuts: (S && S.shortcuts) || null,
+    esc: (S && S.esc) || "",
+    ready: !!S,
+    // 自检用：键盘焦点到底落在谁身上（排查"快捷键没把光标送进搜索框"）
+    active: document.activeElement
+      ? (document.activeElement.id || document.activeElement.tagName) : "",
+    hasFocus: document.hasFocus(),
+    ctrlF: window.__ctrlF || "",
+    copyTest: window.__copyTest || "",
+    escTest: window.__escTest || "",
+  };
+  fetch("/api/probe?d=" + encodeURIComponent(JSON.stringify(probe)))
+    .catch(() => {});
+}
+
+if (SELFTEST) setInterval(sendProbe, 700);
+
+/* 自检：在页面里合成一次 Ctrl+F，验证「快捷键解析 -> 匹配 -> 光标进搜索框」这一整条。
+   真实按键在自动化环境里没法可靠注入（别的程序会抢前台），所以只测页面这一层；
+   解析错位（比如把 Ctrl 记成 ctrlKey）这种 bug 就是靠它兜住的。
+   不用 setTimeout：窗口被遮挡时 Chromium 会把定时器节流，自检会白白等不到。 */
+function selftestKeys() {
+  focusGrid();
+  document.body.dispatchEvent(new KeyboardEvent("keydown", {
+    key: "f", code: "KeyF", ctrlKey: true, bubbles: true, cancelable: true,
+  }));
+  window.__ctrlF = (document.activeElement &&
+    (document.activeElement.id || document.activeElement.tagName)) || "";
+  report("selftest Ctrl+F -> " + window.__ctrlF);
+}
+
+/* 自检：搜索出结果后，模拟「点一下单元格，再按 Ctrl+C」。
+   要验的是两件事：点完焦点必须回到表格（不能还留在搜索框），Ctrl+C 必须真的
+   走进复制动作。两样只要缺一个，用户就会觉得"点了单元格复制不了"。 */
+function selftestCopy() {
+  // 搜索结果第一列现在是「→ 前往」，点它不产生选区（本来就不该产生）
+  const cell = document.querySelector("#win .row .cell:not(.sheet)");
+  if (!cell) { window.__copyTest = "no-cell"; return; }
+
+  $("#q").focus();                  // 还原现场：搜索完光标还在搜索框里
+  cell.dispatchEvent(new MouseEvent("mousedown", {
+    bubbles: true, cancelable: true, button: 0,
+  }));
+  window.dispatchEvent(new MouseEvent("mouseup", {bubbles: true}));
+
+  const ae = document.activeElement;
+  const onGrid = ae === grid;
+  const hasSel = !!sel;
+  window.__copyRan = 0;
+  (ae || document.body).dispatchEvent(new KeyboardEvent("keydown", {
+    key: "c", code: "KeyC", ctrlKey: true, bubbles: true, cancelable: true,
+  }));
+  window.__copyTest = `focus=${onGrid ? "grid" : (ae && (ae.id || ae.tagName))}` +
+                      ` sel=${hasSel ? 1 : 0} copy=${window.__copyRan}`;
+  report("selftest copy -> " + window.__copyTest);
+
+  // 复制是异步的（要问后端要文本），过一会儿把状态栏文字也带进快照
+  setTimeout(() => {
+    window.__copyTest += " | status=" +
+      ((document.getElementById("stRight") || {}).textContent || "");
+  }, 500);
+
+  // 再验一把 Esc：close 模式下一个 Esc 就该把窗口收起来
+  setTimeout(selftestEsc, 1600);
+}
+
+function selftestEsc() {
+  window.__escTest = "esc=" + ((S && S.esc) || "?");
+  document.body.dispatchEvent(new KeyboardEvent("keydown", {
+    key: "Escape", code: "Escape", bubbles: true, cancelable: true,
+  }));
+}
+
+(async function boot() {
+  try {
+    const m = await api("/api/state");
+    applyMeta(m);
+  } catch (err) {
+    setStatus("连不上本地服务", "");
+    report("BOOT fail " + err.message);
+  }
+  sync();
+  grid.focus();
+  if (SELFTEST) selftestKeys();   // 自检：合成一次 Ctrl+F，看光标落点
+  sendProbe();          // 自检：先把首屏的真实渲染结果报上去
+})();
+</script>
+</body>
+</html>

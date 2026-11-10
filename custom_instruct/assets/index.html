@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Custom Instruct</title>
+<style>
+  /* 深色是默认值；系统是浅色就跟着变浅，config.json 里的 theme 可以强行指定 */
+  :root, html.dark{
+    --bg:#14161a;
+    --panel:#1a1d23;
+    --line:#262b33;
+    --text:#e9edf3;
+    --text-2:#b3bbc7;
+    --muted:#6d7684;
+    --accent:#5b9cff;
+    --accent-soft:rgba(91,156,255,.15);
+    --commit:#e0a458;
+    --update:#5bb6a8;
+    --danger:#ff8484;
+    --danger-soft:rgba(255,132,132,.12);
+    --edge:rgba(255,255,255,.10);
+    --hover:rgba(255,255,255,.045);
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#fbfbfc;
+      --panel:#ffffff;
+      --line:#e6e8ec;
+      --text:#1a1d21;
+      --text-2:#454b54;
+      --muted:#8b929c;
+      --accent:#2f6fed;
+      --accent-soft:rgba(47,111,237,.10);
+      --commit:#b4762a;
+      --update:#2c8b7d;
+      --danger:#d94a4a;
+      --danger-soft:rgba(217,74,74,.10);
+      --edge:rgba(17,20,26,.16);
+      --hover:rgba(17,20,26,.035);
+    }
+  }
+  html.light{
+    --bg:#fbfbfc;
+    --panel:#ffffff;
+    --line:#e6e8ec;
+    --text:#1a1d21;
+    --text-2:#454b54;
+    --muted:#8b929c;
+    --accent:#2f6fed;
+    --accent-soft:rgba(47,111,237,.10);
+    --commit:#b4762a;
+    --update:#2c8b7d;
+    --danger:#d94a4a;
+    --danger-soft:rgba(217,74,74,.10);
+    --edge:rgba(17,20,26,.16);
+    --hover:rgba(17,20,26,.035);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font:14px/1.5 system-ui,-apple-system,"Segoe UI","Microsoft YaHei UI","PingFang SC",sans-serif;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    user-select:none;
+  }
+  /* 无边框窗口在桌面上没有轮廓，贴一根细线收边 */
+  body::after{
+    content:"";
+    position:fixed;inset:0;
+    z-index:900;
+    pointer-events:none;
+    border:1px solid var(--edge);
+  }
+
+  .app{height:100%;display:flex;flex-direction:column}
+
+  /* ---------------- 搜索框 ---------------- */
+  .search{
+    flex:0 0 56px;
+    display:flex;align-items:center;gap:10px;
+    padding:0 16px;
+    border-bottom:1px solid var(--line);
+  }
+  .search svg{flex:0 0 16px;color:var(--muted)}
+  #q{
+    flex:1;min-width:0;
+    background:none;border:0;outline:none;
+    color:var(--text);
+    font:inherit;font-size:17px;
+    caret-color:var(--accent);
+  }
+  #q::placeholder{color:var(--muted)}
+  .kbd{
+    flex:0 0 auto;
+    font-size:11px;color:var(--muted);
+    border:1px solid var(--line);border-radius:5px;
+    padding:1px 6px;
+    transition:opacity .15s;
+  }
+  .kbd.off{opacity:0}
+
+  /* ---------------- 列表 ---------------- */
+  .list{
+    flex:1;min-height:0;
+    overflow-y:auto;overflow-x:hidden;
+    padding:6px 6px 4px;
+  }
+  .row{
+    position:relative;
+    display:flex;align-items:center;gap:10px;
+    height:34px;padding:0 10px;
+    border-radius:8px;
+    cursor:default;
+  }
+  .row:hover{background:var(--hover)}
+  .row.sel{background:var(--accent-soft)}
+  .row.sel::before{
+    content:"";
+    position:absolute;left:0;top:8px;bottom:8px;width:2.5px;
+    border-radius:2px;background:var(--accent);
+  }
+  .row .name{
+    flex:1;min-width:0;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    color:var(--text);
+  }
+  .row .cmd{
+    flex:0 0 auto;
+    font-size:11px;color:var(--muted);
+    border:1px solid var(--line);border-radius:5px;
+    padding:0 7px;line-height:17px;
+  }
+  .row[data-cmd="svn commit"] .cmd{color:var(--commit);border-color:currentColor;opacity:.85}
+  .row[data-cmd="svn update"] .cmd{color:var(--update);border-color:currentColor;opacity:.85}
+  .row.sel .cmd{opacity:1}
+
+  .empty{
+    height:100%;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    color:var(--muted);font-size:13px;
+    padding-bottom:12px;
+  }
+  .empty svg{opacity:.5}
+
+  /* ---------------- 状态栏 ---------------- */
+  .status{
+    flex:0 0 28px;
+    display:flex;align-items:center;gap:10px;
+    padding:0 14px;
+    border-top:1px solid var(--line);
+    font-size:11.5px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;
+    transition:color .15s,background .15s;
+  }
+  .status .grow{flex:1}
+  .status .clip{overflow:hidden;text-overflow:ellipsis}
+  .status.err{color:var(--danger);background:var(--danger-soft)}
+
+  /* ---------------- 窗口按钮（最小化 / 关闭） ---------------- */
+  /* 无边框窗口没有系统标题栏，这两个就是唯一的出口：小、清楚、能点到 */
+  .wctl{display:flex;align-items:center;gap:2px;flex:0 0 auto}
+  .wctl button{
+    width:22px;height:22px;display:grid;place-items:center;
+    border:0;border-radius:6px;background:none;padding:0;
+    color:var(--text-2);cursor:pointer;
+    transition:background .14s,color .14s,transform .08s;
+  }
+  .wctl button:hover{background:var(--hover);color:var(--text)}
+  .wctl button:active{transform:scale(.92)}
+  .wctl button.close:hover{background:#e5484d;color:#fff}
+  .wctl svg{display:block}
+
+  ::-webkit-scrollbar{width:9px}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:5px;border:2px solid transparent;background-clip:padding-box}
+  ::-webkit-scrollbar-thumb:hover{background:var(--muted);background-clip:padding-box;border:2px solid transparent}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+         stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.6-3.6"></path></svg>
+    <input id="q" placeholder="输入名称，回车执行" autocomplete="off" spellcheck="false">
+    <span class="kbd off" id="kRun">Enter</span>
+    <div class="wctl">
+      <button id="btnMin" title="最小化" aria-label="最小化">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 5h6"/></svg>
+      </button>
+      <button class="close" id="btnClose" title="关闭" aria-label="关闭">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="list" id="list"></div>
+
+  <div class="status" id="status">
+    <span class="clip" id="left">0 条指令</span>
+    <span class="grow"></span>
+    <span class="clip" id="right"></span>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const $ = (s) => document.querySelector(s);
+  const qEl = $("#q");
+  const listEl = $("#list");
+  const statusEl = $("#status");
+  const leftEl = $("#left");
+  const rightEl = $("#right");
+  const kRun = $("#kRun");
+
+  let ENTRIES = [];
+  let VIEW = [];
+  let SEL = 0;
+  let MOVED = false;
+  let WARNINGS = [];
+  let PATH = "";
+
+  /* ------------------------- 宿主桥（pywebview） ------------------------- */
+  // 页面只认 window.bridge，底层是 Python 的 pywebview.api.*。
+
+  const resetFns = [];
+  const stateFns = [];
+  const readyFns = [];
+  let hostApi = null;
+  let watching = false;
+
+  function bootBridge() {
+    if (hostApi) return;
+    const api = window.pywebview && window.pywebview.api;
+    if (!api || !api.get_state) return;
+    hostApi = api;
+    readyFns.splice(0).forEach((fn) => { try { fn(); } catch (e) {} });
+  }
+
+  function watchHost() {
+    if (watching) return;
+    watching = true;
+    // pywebview 的 ready 事件在文档开头就派发了，页面脚本可能错过，所以再轮询兜底
+    window.addEventListener("pywebviewready", bootBridge, { once: true });
+    let tries = 0;
+    const timer = setInterval(() => {
+      bootBridge();
+      if (hostApi || ++tries > 120) clearInterval(timer);
+    }, 50);
+  }
+
+  function whenHostReady(fn) {
+    if (hostApi) { try { fn(); } catch (e) {} return; }
+    readyFns.push(fn);
+    watchHost();
+  }
+
+  window.bridge = {
+    execute: (id, query, moved) => new Promise((resolve) => {
+      whenHostReady(() => {
+        Promise.resolve(hostApi.execute(id, query, moved))
+          .then(resolve).catch(() => resolve(null));
+      });
+    }),
+    reload: () => new Promise((resolve) => {
+      whenHostReady(() => {
+        Promise.resolve(hostApi.reload()).then(resolve).catch(() => resolve(null));
+      });
+    }),
+    hide: () => whenHostReady(() => hostApi.hide()),
+    minimize: () => whenHostReady(() => hostApi.minimize()),
+    openConfig: () => whenHostReady(() => hostApi.open_config()),
+    onReset: (fn) => resetFns.push(fn),
+    onState: (fn) => stateFns.push(fn),
+  };
+
+  window.__bridgeState = function (state) {
+    for (const fn of stateFns) { try { fn(state); } catch (e) {} }
+  };
+  window.__bridgeReset = function () {
+    for (const fn of resetFns) { try { fn(); } catch (e) {} }
+  };
+
+  /* ------------------------- 快捷键 ------------------------- */
+  // 全部来自 config.json 的 shortcuts；写成空串就等于停用。
+
+  const KEY_ALIASES = {
+    esc: "escape", escape: "escape",
+    enter: "enter", return: "enter",
+    space: " ",
+    del: "delete", delete: "delete",
+    backspace: "backspace", tab: "tab",
+    up: "arrowup", down: "arrowdown", left: "arrowleft", right: "arrowright",
+    home: "home", end: "end", pageup: "pageup", pagedown: "pagedown",
+    insert: "insert",
+  };
+
+  /** "Ctrl+Shift+C" -> { ctrl, alt, shift, meta, key } */
+  function parseAccel(spec) {
+    if (typeof spec !== "string" || !spec.trim()) return null;
+    const acc = { ctrl: false, alt: false, shift: false, meta: false, key: "" };
+    for (const raw of spec.split("+")) {
+      const t = raw.trim().toLowerCase();
+      if (!t) continue;
+      if (t === "ctrl" || t === "control") acc.ctrl = true;
+      else if (t === "alt") acc.alt = true;
+      else if (t === "shift") acc.shift = true;
+      else if (t === "win" || t === "meta" || t === "cmd" || t === "super") acc.meta = true;
+      else acc.key = KEY_ALIASES[t] || t;
+    }
+    return acc.key ? acc : null;
+  }
+
+  function matchAccel(ev, acc) {
+    if (!acc) return false;
+    if (!!ev.ctrlKey !== acc.ctrl) return false;
+    if (!!ev.altKey !== acc.alt) return false;
+    if (!!ev.shiftKey !== acc.shift) return false;
+    if (!!ev.metaKey !== acc.meta) return false;
+    return (ev.key || "").toLowerCase() === acc.key;
+  }
+
+  let SC = {};
+
+  function applyShortcuts() {
+    const s = (window.__state && window.__state.shortcuts) || {};
+    SC = {
+      hide: parseAccel(s.hide),
+      run: parseAccel(s.run),
+      next: parseAccel(s.next),
+      prev: parseAccel(s.prev),
+      pageNext: parseAccel(s.page_next),
+      pagePrev: parseAccel(s.page_prev),
+      reload: parseAccel(s.reload),
+      edit: parseAccel(s.edit),
+    };
+    kRun.textContent = s.run || "";
+    kRun.classList.toggle("off", !s.run);
+  }
+
+  /* ------------------------- 列表 ------------------------- */
+
+  function filter() {
+    const query = (qEl.value || "").trim().toLowerCase();
+    VIEW = query
+      ? ENTRIES.filter((e) => e.search.toLowerCase().indexOf(query) >= 0)
+      : ENTRIES.slice();
+    SEL = 0;
+    MOVED = false;
+    render();
+  }
+
+  function render() {
+    listEl.innerHTML = "";
+
+    if (!VIEW.length) {
+      const box = document.createElement("div");
+      box.className = "empty";
+      box.id = "empty";
+      const total = ENTRIES.length;
+      box.innerHTML =
+        '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" ' +
+        'stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle>' +
+        '<path d="M20 20l-3.6-3.6"></path></svg>';
+      const tip = document.createElement("div");
+      tip.textContent = total
+        ? "没有匹配的指令"
+        : "还没有指令，按 Ctrl+O 打开 config.json 往 commands 里加几条";
+      box.appendChild(tip);
+      listEl.appendChild(box);
+      updateStatus();
+      return;
+    }
+
+    const frag = document.createDocumentFragment();
+    VIEW.forEach((entry, index) => {
+      const row = document.createElement("div");
+      row.className = "row" + (index === SEL ? " sel" : "");
+      row.dataset.cmd = entry.command;
+      row.dataset.idx = String(index);
+
+      const name = document.createElement("span");
+      name.className = "name";
+      name.textContent = entry.name;
+
+      const cmd = document.createElement("span");
+      cmd.className = "cmd";
+      cmd.textContent = entry.command;
+
+      row.appendChild(name);
+      row.appendChild(cmd);
+      frag.appendChild(row);
+    });
+    listEl.appendChild(frag);
+    updateStatus();
+    scrollToSel();
+  }
+
+  function paint() {
+    const rows = listEl.querySelectorAll(".row");
+    rows.forEach((row, index) => row.classList.toggle("sel", index === SEL));
+    scrollToSel();
+  }
+
+  function scrollToSel() {
+    const row = listEl.querySelectorAll(".row")[SEL];
+    if (row) row.scrollIntoView({ block: "nearest" });
+  }
+
+  function move(delta, wrap) {
+    if (!VIEW.length) return;
+    let next = SEL + delta;
+    if (wrap) {
+      // 上下是一条闭环：最后一行再按 Down 回到第一行
+      next = ((next % VIEW.length) + VIEW.length) % VIEW.length;
+    } else {
+      next = Math.max(0, Math.min(VIEW.length - 1, next));
+    }
+    if (next === SEL && !MOVED) return;
+    SEL = next;
+    MOVED = true;
+    paint();
+  }
+
+  /* ------------------------- 状态栏 ------------------------- */
+
+  let errorTimer = 0;
+
+  function updateStatus() {
+    const total = ENTRIES.length;
+    let text = total ? total + " 条指令" : "还没有指令";
+    if (WARNINGS.length) text += " · " + WARNINGS.length + " 处配置问题";
+    leftEl.textContent = text;
+    leftEl.title = (WARNINGS.length ? WARNINGS.join("\n") + "\n\n" : "") + PATH;
+
+    const hints = [];
+    if (SC.run) hints.push(shortcutText("run"));
+    if (SC.hide) hints.push(shortcutText("hide"));
+    rightEl.textContent = hints.length ? hints.join(" · ") : "";
+    rightEl.title = "";
+  }
+
+  function shortcutText(key) {
+    const s = (window.__state && window.__state.shortcuts) || {};
+    const label = { run: "执行", hide: "关闭" }[key] || "";
+    const spec = s[key] || "";
+    return label ? spec + " " + label : "";
+  }
+
+  function showError(message) {
+    clearTimeout(errorTimer);
+    statusEl.classList.add("err");
+    leftEl.textContent = message;
+    leftEl.title = message;
+    errorTimer = setTimeout(() => {
+      statusEl.classList.remove("err");
+      updateStatus();
+    }, 4000);
+  }
+
+  /* ------------------------- 执行 ------------------------- */
+
+  let running = false;
+
+  async function run() {
+    if (running || !VIEW.length) {
+      if (!VIEW.length) showError("没有可执行的指令");
+      return;
+    }
+    const entry = VIEW[Math.min(SEL, VIEW.length - 1)];
+    running = true;
+    let result = null;
+    try {
+      result = await window.bridge.execute(entry.id, qEl.value.trim(), MOVED);
+    } catch (e) {
+      result = { ok: false, message: "执行失败：" + e };
+    } finally {
+      running = false;
+    }
+    if (result && result.ok === false) showError(result.message || "执行失败");
+  }
+
+  async function doReload() {
+    const state = await window.bridge.reload();
+    if (state) applyState(state);
+  }
+
+  /* ------------------------- 事件 ------------------------- */
+
+  function focusInput() {
+    qEl.focus();
+    const n = qEl.value.length;
+    try { qEl.setSelectionRange(n, n); } catch (e) {}
+  }
+
+  function reset() {
+    qEl.value = "";
+    filter();
+    listEl.scrollTop = 0;
+    statusEl.classList.remove("err");
+    clearTimeout(errorTimer);
+    updateStatus();
+    focusInput();
+  }
+
+  function applyState(state) {
+    if (!state) return;
+    window.__state = state;
+    ENTRIES = state.entries || [];
+    WARNINGS = state.warnings || [];
+    PATH = state.path || "";
+    applyTheme(state.theme);
+    applyShortcuts();
+    filter();
+  }
+
+  function applyTheme(theme) {
+    const root = document.documentElement;
+    root.classList.remove("dark", "light");
+    if (theme === "dark" || theme === "light") root.classList.add(theme);
+  }
+
+  qEl.addEventListener("input", filter);
+
+  listEl.addEventListener("mousedown", (ev) => {
+    const row = ev.target.closest(".row");
+    if (!row) return;
+    ev.preventDefault();  // 别把焦点从输入框抢走
+    SEL = Number(row.dataset.idx);
+    MOVED = true;
+    paint();
+  });
+
+  listEl.addEventListener("dblclick", (ev) => {
+    const row = ev.target.closest(".row");
+    if (!row) return;
+    SEL = Number(row.dataset.idx);
+    MOVED = true;
+    paint();
+    run();
+  });
+
+  // 窗口按钮：mousedown 先拦一下，别把焦点从输入框抢走
+  ["#btnMin", "#btnClose"].forEach((sel) => {
+    const btn = document.querySelector(sel);
+    btn.addEventListener("mousedown", (ev) => ev.preventDefault());
+  });
+  document.querySelector("#btnMin").addEventListener("click", () => window.bridge.minimize());
+  document.querySelector("#btnClose").addEventListener("click", () => window.bridge.hide());
+
+  document.addEventListener("keydown", (ev) => {
+    if (matchAccel(ev, SC.hide)) { ev.preventDefault(); window.bridge.hide(); return; }
+    if (matchAccel(ev, SC.run)) { ev.preventDefault(); run(); return; }
+    if (matchAccel(ev, SC.next)) { ev.preventDefault(); move(1, true); return; }
+    if (matchAccel(ev, SC.prev)) { ev.preventDefault(); move(-1, true); return; }
+    if (matchAccel(ev, SC.pageNext)) { ev.preventDefault(); move(5, false); return; }
+    if (matchAccel(ev, SC.pagePrev)) { ev.preventDefault(); move(-5, false); return; }
+    if (matchAccel(ev, SC.reload)) { ev.preventDefault(); doReload(); return; }
+    if (matchAccel(ev, SC.edit)) { ev.preventDefault(); window.bridge.openConfig(); return; }
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) focusInput();
+  });
+
+  if (window.bridge) {
+    window.bridge.onReset(reset);
+    window.bridge.onState(applyState);
+  }
+
+  watchHost();
+  focusInput();
+})();
+</script>
+</body>
+</html>

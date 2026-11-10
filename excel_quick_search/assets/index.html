@@ -1,0 +1,939 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Excel 快速搜索</title>
+<style>
+  :root{
+    --bg:#0f1114;
+    --panel:#15181d;
+    --panel-2:#1a1e24;
+    --line:#242830;
+    --text:#e9ecf1;
+    --text-2:#b9c0cb;
+    --muted:#6f7885;
+    --accent:#5b9cff;
+    --accent-soft:rgba(91,156,255,.13);
+    --danger:#ff7a7a;
+    --mark:rgba(91,156,255,.28);
+    --radius:10px;
+    --shadow:0 18px 48px rgba(0,0,0,.45);
+  }
+  html.light{
+    --bg:#fbfbfc;
+    --panel:#ffffff;
+    --panel-2:#f4f5f7;
+    --line:#e6e8ec;
+    --text:#1a1d21;
+    --text-2:#454b54;
+    --muted:#8b929c;
+    --accent:#2f6fed;
+    --accent-soft:rgba(47,111,237,.09);
+    --danger:#d94a4a;
+    --mark:rgba(47,111,237,.18);
+    --shadow:0 18px 48px rgba(20,30,50,.16);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font:14px/1.5 system-ui,-apple-system,"Segoe UI","Microsoft YaHei UI","PingFang SC",sans-serif;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+    user-select:none;
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input{font:inherit;color:inherit}
+  ::selection{background:var(--accent-soft);color:var(--text)}
+
+  .app{height:100%;display:flex;flex-direction:column;position:relative}
+
+  /* ---------------- 顶栏 ---------------- */
+  header{
+    height:44px;flex:0 0 44px;
+    display:flex;align-items:center;gap:9px;
+    padding:0 10px 0 12px;
+    border-bottom:1px solid var(--line);
+  }
+  .brand{
+    width:22px;height:22px;flex:0 0 22px;
+    display:grid;place-items:center;
+    border-radius:6px;
+    background:linear-gradient(145deg,#3f8bff,#2f6fed);
+    box-shadow:0 1px 6px rgba(63,139,255,.4);
+  }
+  .title{font-size:13px;font-weight:600;letter-spacing:.4px}
+  .grow{flex:1}
+  .tag{
+    max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    height:21px;padding:0 9px;border-radius:11px;
+    display:flex;align-items:center;
+    background:var(--accent-soft);color:var(--accent);
+    font-size:11.5px;letter-spacing:.2px;
+  }
+  .icon-btn{
+    width:28px;height:28px;border-radius:7px;
+    display:grid;place-items:center;
+    color:var(--muted);
+    transition:background .15s,color .15s;
+  }
+  .icon-btn:hover{background:var(--panel-2);color:var(--text)}
+
+  /* ---------------- 搜索栏 ---------------- */
+  .searchbar{
+    flex:0 0 auto;
+    display:flex;align-items:center;gap:10px;
+    padding:12px 14px 10px;
+  }
+  .searchbar .mag{flex:0 0 16px;color:var(--muted)}
+  #q{
+    flex:1;min-width:0;
+    height:38px;padding:0 4px;
+    background:transparent;border:0;outline:none;
+    font-size:15.5px;letter-spacing:.2px;
+    caret-color:var(--accent);
+    user-select:text;
+  }
+  #q::placeholder{color:var(--muted)}
+  .count{
+    flex:0 0 auto;
+    font-size:11.5px;color:var(--muted);
+    font-variant-numeric:tabular-nums;
+  }
+
+  .progress{
+    height:2px;flex:0 0 2px;
+    overflow:hidden;background:transparent;
+    opacity:0;transition:opacity .18s;
+  }
+  .progress.on{opacity:1}
+  .progress i{
+    display:block;height:100%;width:36%;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);
+    animation:slide 1.05s cubic-bezier(.4,0,.6,1) infinite;
+  }
+  @keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(320%)}}
+
+  /* ---------------- 列表 ---------------- */
+  .listwrap{flex:1;min-height:0;position:relative;overflow:hidden}
+  .list{
+    height:100%;overflow-y:auto;overflow-x:hidden;
+    list-style:none;
+    padding:2px 8px 8px;
+  }
+  .row{
+    display:flex;flex-direction:column;gap:2px;
+    padding:7px 10px;border-radius:8px;
+    cursor:default;
+  }
+  .row .nm{
+    font-size:13.5px;color:var(--text);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .row .nm mark{background:var(--mark);color:inherit;border-radius:3px;padding:0 1px}
+  .row .mt{
+    display:flex;align-items:center;gap:6px;
+    font-size:11.5px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;
+  }
+  .row .mt .dir{
+    overflow:hidden;text-overflow:ellipsis;
+    max-width:60%;
+  }
+  .row .mt .sep{opacity:.45}
+  .row.on{background:var(--accent-soft)}
+  .row.on .nm{color:var(--text)}
+  .row.on .mt{color:var(--text-2)}
+
+  .state{
+    position:absolute;inset:0;
+    display:grid;place-content:center;justify-items:center;gap:6px;
+    text-align:center;padding:24px;
+    pointer-events:none;
+  }
+  .state .state-title{font-size:13.5px;color:var(--text-2)}
+  .state .state-sub{font-size:12px;color:var(--muted);max-width:420px;line-height:1.7}
+  .state.hide{display:none}
+
+  /* ---------------- 底栏 ---------------- */
+  footer{
+    height:28px;flex:0 0 28px;
+    display:flex;align-items:center;gap:8px;
+    padding:0 14px;
+    border-top:1px solid var(--line);
+    font-size:11.5px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;
+  }
+  footer #status{overflow:hidden;text-overflow:ellipsis}
+  footer .keys{opacity:.85}
+
+  /* ---------------- 数据源选择 ---------------- */
+  .picker{
+    position:absolute;inset:0;z-index:50;
+    display:grid;place-items:center;
+    padding:24px;
+    background:rgba(8,10,13,.72);
+    backdrop-filter:blur(6px);
+  }
+  html.light .picker{background:rgba(240,243,248,.78)}
+  .picker.hide{display:none}
+  .picker-card{
+    width:100%;max-width:460px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+    animation:pop .16s ease-out;
+  }
+  @keyframes pop{from{transform:scale(.97);opacity:.4}to{transform:none;opacity:1}}
+  .picker-head{
+    display:flex;align-items:baseline;gap:10px;
+    padding:14px 16px 10px;
+  }
+  .picker-title{font-size:13.5px;font-weight:600}
+  .picker-hint{font-size:11.5px;color:var(--muted)}
+  .picker-list{padding:4px 8px 10px;display:flex;flex-direction:column;gap:2px;max-height:56vh;overflow-y:auto}
+  .src{
+    display:flex;align-items:center;gap:10px;
+    padding:8px 10px;border-radius:9px;
+    cursor:default;
+  }
+  .src .key{
+    flex:0 0 20px;height:20px;border-radius:6px;
+    display:grid;place-items:center;
+    background:var(--panel-2);color:var(--text-2);
+    font-size:11.5px;font-weight:600;
+    font-variant-numeric:tabular-nums;
+  }
+  .src .txt{min-width:0;display:flex;flex-direction:column;gap:1px}
+  .src .nm{font-size:13px;color:var(--text)}
+  .src .pt{
+    font-size:11px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .src.on{background:var(--accent-soft)}
+  .src.on .key{background:var(--accent);color:#fff}
+  .src.on .nm{color:var(--text)}
+
+  /* ---------------- 提示 ---------------- */
+  .toast{
+    position:fixed;left:50%;bottom:44px;transform:translate(-50%,8px);
+    padding:7px 14px;border-radius:18px;
+    background:var(--panel-2);border:1px solid var(--line);
+    font-size:12px;color:var(--text-2);
+    opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s;
+    z-index:60;
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;border:3px solid transparent;background-clip:content-box}
+  ::-webkit-scrollbar-thumb:hover{background:var(--muted);background-clip:content-box}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round">
+        <circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2 14 14"/>
+      </svg>
+    </div>
+    <div class="title">Excel 快速搜索</div>
+    <div class="grow"></div>
+    <div class="tag" id="srcTag" hidden></div>
+    <button class="icon-btn" id="reloadBtn" title="重新扫描">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <path d="M13.4 8a5.4 5.4 0 1 1-1.6-3.8"/><path d="M13.6 2.6v3.1h-3.1"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="cfgBtn" title="打开配置文件">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="8" cy="8" r="2.2"/>
+        <path d="M8 1.7v1.6M8 12.7v1.6M2.6 8H1M15 8h-1.6M4.2 4.2 3 3M13 13l-1.2-1.2M11.8 4.2 13 3M3 13l1.2-1.2"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="hideBtn" title="收起窗口">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+        <path d="M4 4l8 8M12 4l-8 8"/>
+      </svg>
+    </button>
+  </header>
+
+  <div class="searchbar">
+    <svg class="mag" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+      <circle cx="7" cy="7" r="4.4"/><path d="M10.4 10.4 14 14"/>
+    </svg>
+    <input id="q" type="text" placeholder="输入文件名搜索…" spellcheck="false" autocomplete="off">
+    <span class="count" id="count"></span>
+  </div>
+
+  <div class="progress" id="progress"><i></i></div>
+
+  <div class="listwrap">
+    <ul class="list" id="list"></ul>
+    <div class="state" id="state">
+      <div class="state-title" id="stateTitle">正在加载…</div>
+      <div class="state-sub" id="stateSub"></div>
+    </div>
+  </div>
+
+  <footer>
+    <span id="status">就绪</span>
+    <span class="grow"></span>
+    <span class="keys" id="keys"></span>
+  </footer>
+</div>
+
+<div class="picker hide" id="picker">
+  <div class="picker-card">
+    <div class="picker-head">
+      <span class="picker-title">选择数据源</span>
+      <span class="picker-hint" id="pickerHint"></span>
+    </div>
+    <div class="picker-list" id="pickerList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const $ = (s) => document.querySelector(s);
+  const q = $('#q');
+  const list = $('#list');
+  const countEl = $('#count');
+  const statusEl = $('#status');
+  const keysEl = $('#keys');
+  const srcTag = $('#srcTag');
+  const stateEl = $('#state');
+  const stateTitle = $('#stateTitle');
+  const stateSub = $('#stateSub');
+  const progress = $('#progress');
+  const picker = $('#picker');
+  const pickerList = $('#pickerList');
+  const pickerHint = $('#pickerHint');
+  const toastEl = $('#toast');
+
+  const state = {
+    cfg: null,
+    files: [],
+    rows: [],
+    sel: -1,
+    query: '',
+    sourceKey: '',
+    pickerOpen: false,
+    pickerSel: 0,
+    busy: false,
+    gen: 0,   // 每次重置 +1；扫描回来时对不上号就说明已经收起了，结果直接扔掉
+  };
+
+  /* ------------------------- 宿主桥（pywebview） ------------------------- */
+  // 宿主是 Python 那边，window.pywebview.api.* 由 pywebview 注入。
+  // 这里把它包成 window.bridge，页面其余部分不用关心底层是谁。
+
+  const resetFns = [];
+  const configFns = [];
+  const readyFns = [];
+  let hostApi = null;
+  let watching = false;
+
+  function bootBridge() {
+    if (hostApi) return;
+    const api = window.pywebview && window.pywebview.api;
+    if (!api || !api.get_config) return;
+    hostApi = api;
+    readyFns.splice(0).forEach((fn) => { try { fn(); } catch (e) {} });
+  }
+
+  function watchHost() {
+    if (watching) return;
+    watching = true;
+    // pywebview 的 ready 事件在文档开头就派发了，页面脚本可能错过，所以再轮询兜底
+    window.addEventListener('pywebviewready', bootBridge, { once: true });
+    let tries = 0;
+    const timer = setInterval(() => {
+      bootBridge();
+      if (hostApi || ++tries > 120) clearInterval(timer);
+    }, 50);
+  }
+
+  function whenHostReady(fn) {
+    if (hostApi) { try { fn(); } catch (e) {} return; }
+    readyFns.push(fn);
+    watchHost();
+  }
+
+  function callHost(name, ...args) {
+    if (!hostApi) return undefined;
+    try { return hostApi[name](...args); } catch (e) { return undefined; }
+  }
+
+  function api(name, ...args) {
+    return new Promise((resolve) => {
+      whenHostReady(() => {
+        try {
+          Promise.resolve(hostApi[name](...args)).then(resolve).catch(() => resolve(null));
+        } catch (e) { resolve(null); }
+      });
+    });
+  }
+
+  window.bridge = {
+    hide: () => callHost('hide'),
+    quit: () => callHost('quit'),
+    getConfig: () => new Promise((resolve) => {
+      whenHostReady(() => {
+        Promise.resolve(hostApi.get_config()).then(resolve).catch(() => resolve(null));
+      });
+    }),
+    onReset: (fn) => resetFns.push(fn),
+    onConfig: (fn) => configFns.push(fn),
+  };
+
+  // 宿主 -> 页面
+  window.__bridgeApplyConfig = function (cfg) {
+    for (const fn of configFns) { try { fn(cfg); } catch (e) {} }
+  };
+  window.__bridgeReset = function () {
+    for (const fn of resetFns) { try { fn(); } catch (e) {} }
+  };
+  window.__bridgeScanning = function () { setLoading(true); };
+  window.__bridgeScanResult = function (res) { applyScan(res); };
+
+  watchHost();
+
+  /* ------------------------- 主题 ------------------------- */
+  function applyTheme(theme) {
+    const dark = theme !== 'light';
+    document.documentElement.classList.toggle('light', !dark);
+  }
+
+  /* ------------------------- 界面状态 ------------------------- */
+  function setLoading(on, text) {
+    state.busy = !!on;
+    progress.classList.toggle('on', !!on);
+    if (on) {
+      showState(text || '正在扫描…', '文件多的话要几秒，稍等');
+      statusEl.textContent = '扫描中…';
+      countEl.textContent = '';
+    }
+  }
+
+  function showState(title, sub) {
+    stateTitle.textContent = title || '';
+    stateSub.textContent = sub || '';
+    stateEl.classList.remove('hide');
+  }
+
+  function hideState() { stateEl.classList.add('hide'); }
+
+  let toastTimer = null;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('on'), 1500);
+  }
+
+  function setStatus(text) { statusEl.textContent = text || ''; }
+
+  function updateCount() {
+    const total = state.files.length;
+    const shown = state.rows.length;
+    if (!total) { countEl.textContent = ''; return; }
+    countEl.textContent = state.query.trim()
+      ? `${shown} / ${total}`
+      : `${total} 个文件`;
+  }
+
+  /* ------------------------- 数据源选择 ------------------------- */
+  function sources() {
+    const list = state.cfg && Array.isArray(state.cfg.sources) ? state.cfg.sources : [];
+    return list;
+  }
+
+  /** sources 只配了一个就没什么可选的：直接进它，不必让用户再按一次键。 */
+  function soleSource() {
+    const items = sources();
+    return items.length === 1 && items[0] && items[0].key ? items[0] : null;
+  }
+
+  /** 单数据源直接扫描；两个以上才弹选择框。 */
+  function pickSource() {
+    const only = soleSource();
+    if (only) { chooseSource(only.key); return; }
+    openPicker();
+  }
+
+  function renderPicker() {
+    pickerList.innerHTML = '';
+    const items = sources();
+
+    if (!items.length) {
+      const empty = document.createElement('div');
+      empty.className = 'src';
+      const txt = document.createElement('div');
+      txt.className = 'txt';
+      const nm = document.createElement('div');
+      nm.className = 'nm';
+      nm.textContent = '还没有配置数据源';
+      const pt = document.createElement('div');
+      pt.className = 'pt';
+      pt.textContent = '在 config.json 的 sources 里加上 { key, name, path }';
+      txt.append(nm, pt);
+      empty.append(txt);
+      pickerList.append(empty);
+      return;
+    }
+
+    items.forEach((s, i) => {
+      const el = document.createElement('div');
+      el.className = 'src' + (i === state.pickerSel ? ' on' : '');
+      el.dataset.i = String(i);
+
+      const key = document.createElement('span');
+      key.className = 'key';
+      key.textContent = s.key;
+
+      const txt = document.createElement('div');
+      txt.className = 'txt';
+      const nm = document.createElement('div');
+      nm.className = 'nm';
+      nm.textContent = s.name || s.path;
+      const pt = document.createElement('div');
+      pt.className = 'pt';
+      pt.textContent = s.path;
+      txt.append(nm, pt);
+
+      el.append(key, txt);
+      el.addEventListener('click', () => chooseSource(s.key));
+      pickerList.append(el);
+    });
+  }
+
+  function movePicker(step) {
+    const items = sources();
+    if (!items.length) return;
+    state.pickerSel = Math.max(0, Math.min(items.length - 1, state.pickerSel + step));
+    [...pickerList.children].forEach((el, i) => el.classList.toggle('on', i === state.pickerSel));
+  }
+
+  function openPicker() {
+    state.pickerOpen = true;
+    state.pickerSel = 0;
+    renderPicker();
+    picker.classList.remove('hide');
+    setStatus('选择数据源');
+    updateCount();
+  }
+
+  function closePicker() {
+    state.pickerOpen = false;
+    picker.classList.add('hide');
+  }
+
+  async function chooseSource(key) {
+    if (state.busy) return;
+    closePicker();
+    state.sourceKey = String(key);
+    state.query = '';
+    q.value = '';
+    setLoading(true);
+    const gen = state.gen;
+    const res = await api('scan', String(key));
+    if (gen !== state.gen) return;   // 扫描期间窗口被收起了，别再往页面上填东西
+    applyScan(res);
+  }
+
+  /* ------------------------- 扫描结果 ------------------------- */
+  function applyScan(res) {
+    setLoading(false);
+    closePicker();
+
+    if (!res || !res.ok) {
+      state.files = [];
+      state.rows = [];
+      state.sel = -1;
+      renderRows('');
+      updateCount();
+      const err = (res && res.error) || '没有拿到扫描结果';
+      showState('扫描失败', err);
+      setStatus(err);
+      if (res && res.path) { srcTag.textContent = res.name || res.path; srcTag.title = res.path; srcTag.hidden = false; }
+      return;
+    }
+
+    if (res.key) state.sourceKey = String(res.key);
+    state.files = Array.isArray(res.files) ? res.files : [];
+    state.rows = [];
+    state.sel = -1;
+    srcTag.textContent = res.name || res.path;
+    srcTag.title = res.path;
+    srcTag.hidden = false;
+
+    q.value = '';
+    state.query = '';
+    filterAndRender();
+
+    const bits = [`找到 ${res.count} 个文件`];
+    if (res.elapsed) bits.push(`${res.elapsed}s`);
+    if (res.truncated) bits.push('已截断');
+    setStatus(bits.join(' · '));
+    focusInput();
+  }
+
+  /* ------------------------- 过滤与渲染 ------------------------- */
+  function filterAndRender() {
+    const kw = state.query.trim().toLowerCase();
+    let pairs;
+
+    if (!kw) {
+      pairs = state.files.map((f) => ({ f, s: 0 }));
+    } else {
+      pairs = [];
+      for (const f of state.files) {
+        const name = f.name.toLowerCase();
+        let s = -1;
+        if (name.startsWith(kw)) s = 1000;
+        else {
+          const i = name.indexOf(kw);
+          if (i >= 0) s = 900 - i;
+        }
+        if (s >= 0) pairs.push({ f, s });
+      }
+      pairs.sort((a, b) =>
+        b.s - a.s ||
+        a.f.name.length - b.f.name.length ||
+        (a.f.name.toLowerCase() < b.f.name.toLowerCase() ? -1 : 1)
+      );
+    }
+
+    state.rows = pairs.map((p) => p.f);
+    state.sel = state.rows.length ? 0 : -1;
+    renderRows(kw);
+    updateCount();
+  }
+
+  const MAX_ROWS = 400;
+
+  function renderRows(kw) {
+    list.innerHTML = '';
+    const rows = state.rows;
+
+    if (!rows.length) {
+      const hasSource = !!state.sourceKey;
+      if (!hasSource) showState('选择一个数据源', '按数字键直接选，Enter 确认');
+      else if (kw) showState('没有匹配的文件', `没有文件名包含「${kw}」`);
+      else showState('这个数据源里没有 Excel 文件', '检查 config.json 里的路径，或者按 F5 重新扫描');
+      return;
+    }
+
+    hideState();
+    const frag = document.createDocumentFragment();
+    rows.slice(0, MAX_ROWS).forEach((f, i) => {
+      const li = document.createElement('li');
+      li.className = 'row' + (i === state.sel ? ' on' : '');
+      li.dataset.i = String(i);
+
+      const nm = document.createElement('div');
+      nm.className = 'nm';
+      nm.append(highlight(f.name, kw));
+
+      const mt = document.createElement('div');
+      mt.className = 'mt';
+      if (f.dir) {
+        const d = document.createElement('span');
+        d.className = 'dir';
+        d.textContent = f.dir;
+        mt.append(d, sep());
+      }
+      const sz = document.createElement('span');
+      sz.textContent = f.sizeText || '';
+      const tm = document.createElement('span');
+      tm.textContent = f.timeText || '';
+      mt.append(sz, sep(), tm);
+
+      li.append(nm, mt);
+      li.addEventListener('click', () => setSel(i));
+      li.addEventListener('dblclick', () => { setSel(i); openSel(); });
+      frag.append(li);
+    });
+    list.append(frag);
+
+    if (rows.length > MAX_ROWS) {
+      const more = document.createElement('li');
+      more.className = 'row';
+      const t = document.createElement('div');
+      t.className = 'nm';
+      t.style.color = 'var(--muted)';
+      t.style.fontSize = '12px';
+      t.textContent = `还有 ${rows.length - MAX_ROWS} 条没显示，输入关键词缩小范围`;
+      more.append(t);
+      list.append(more);
+    }
+  }
+
+  function sep() {
+    const s = document.createElement('span');
+    s.className = 'sep';
+    s.textContent = '·';
+    return s;
+  }
+
+  function highlight(name, kw) {
+    const frag = document.createDocumentFragment();
+    if (!kw) { frag.append(name); return frag; }
+    const lower = name.toLowerCase();
+    const i = lower.indexOf(kw);
+    if (i < 0) { frag.append(name); return frag; }
+    frag.append(name.slice(0, i));
+    const m = document.createElement('mark');
+    m.textContent = name.slice(i, i + kw.length);
+    frag.append(m);
+    frag.append(name.slice(i + kw.length));
+    return frag;
+  }
+
+  function setSel(i) {
+    const n = state.rows.length;
+    if (!n) return;
+    i = Math.max(0, Math.min(Math.min(n, MAX_ROWS) - 1, i));
+    state.sel = i;
+    [...list.children].forEach((el, idx) => el.classList.toggle('on', idx === i));
+    const el = list.children[i];
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+  }
+
+  function focusInput() {
+    q.focus();
+    const n = q.value.length;
+    try { q.setSelectionRange(n, n); } catch (e) {}
+  }
+
+  /* ------------------------- 动作 ------------------------- */
+  async function openSel() {
+    const f = state.rows[state.sel];
+    if (!f) return;
+    setStatus('正在打开 ' + f.name + ' …');
+    const res = await api('open_file', f.path);
+    if (res && res.ok) {
+      toast(res.how === 'shower' ? '已在查看器里打开' : '已用系统默认程序打开');
+      setTimeout(hideWindow, 150);
+    } else {
+      const err = (res && res.error) || '未知错误';
+      setStatus('打开失败：' + err);
+      toast('打开失败：' + err);
+    }
+  }
+
+  async function revealSel() {
+    const f = state.rows[state.sel];
+    if (!f) return;
+    const ok = await api('reveal', f.path);
+    if (ok) { toast('已在资源管理器里定位'); setTimeout(hideWindow, 150); }
+    else toast('定位失败');
+  }
+
+  async function copySel() {
+    const f = state.rows[state.sel];
+    if (!f) return;
+    try {
+      await navigator.clipboard.writeText(f.path);
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = f.path;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    toast('路径已复制');
+  }
+
+  async function rescan() {
+    if (!state.sourceKey) { pickSource(); return; }
+    setLoading(true);
+    const gen = state.gen;
+    const res = await api('rescan');
+    if (gen !== state.gen) return;
+    applyScan(res);
+    if (res && res.ok) toast('已重新扫描');
+  }
+
+  function hideWindow() {
+    if (window.bridge) { window.bridge.hide(); return; }
+    try { window.close(); } catch (e) {}
+  }
+
+  function resetAll() {
+    state.gen++;
+    state.files = [];
+    state.rows = [];
+    state.sel = -1;
+    state.query = '';
+    state.sourceKey = '';
+    state.busy = false;
+    q.value = '';
+    q.blur();
+    list.innerHTML = '';
+    srcTag.hidden = true;
+    progress.classList.remove('on');
+    countEl.textContent = '';
+    pickSource();
+  }
+
+  /* ------------------------- 快捷键 ------------------------- */
+  // 全部来自 config.json 的 shortcuts；没写或注释掉就等于不启用。
+
+  const KEY_ALIASES = {
+    esc: 'escape', escape: 'escape',
+    enter: 'enter', return: 'enter',
+    space: ' ',
+    del: 'delete', delete: 'delete',
+    backspace: 'backspace', tab: 'tab',
+    up: 'arrowup', down: 'arrowdown', left: 'arrowleft', right: 'arrowright',
+    home: 'home', end: 'end', pageup: 'pageup', pagedown: 'pagedown',
+    insert: 'insert',
+  };
+
+  /** "Ctrl+Shift+C" -> { ctrl, alt, shift, meta, key } */
+  function parseAccel(spec) {
+    if (typeof spec !== 'string' || !spec.trim()) return null;
+    const acc = { ctrl: false, alt: false, shift: false, meta: false, key: '' };
+    for (const raw of spec.split('+')) {
+      const t = raw.trim().toLowerCase();
+      if (!t) continue;
+      if (t === 'ctrl' || t === 'control') acc.ctrl = true;
+      else if (t === 'alt') acc.alt = true;
+      else if (t === 'shift') acc.shift = true;
+      else if (t === 'win' || t === 'meta' || t === 'cmd' || t === 'super') acc.meta = true;
+      else acc.key = KEY_ALIASES[t] || t;
+    }
+    return acc.key ? acc : null;
+  }
+
+  function matchAccel(ev, acc) {
+    if (!acc) return false;
+    if (!!ev.ctrlKey !== acc.ctrl) return false;
+    if (!!ev.altKey !== acc.alt) return false;
+    if (!!ev.shiftKey !== acc.shift) return false;
+    if (!!ev.metaKey !== acc.meta) return false;
+    return (ev.key || '').toLowerCase() === acc.key;
+  }
+
+  let SC = {};
+  let GLOBAL_HINT = '';
+
+  function applyShortcuts() {
+    const s = (state.cfg && state.cfg.shortcuts) || {};
+    SC = {
+      hide: parseAccel(s.hide),
+      focus: parseAccel(s.focus),
+      open: parseAccel(s.open),
+      reveal: parseAccel(s.reveal),
+      copy: parseAccel(s.copy),
+      reload: parseAccel(s.reload),
+    };
+    GLOBAL_HINT = (s.global || '').trim();
+
+    const keys = ['↑↓ 选择'];
+    if (s.open) keys.push(s.open + ' 打开');
+    if (s.reload) keys.push(s.reload + ' 刷新');
+    if (s.hide) keys.push(s.hide + ' 收起');
+    keysEl.textContent = keys.join(' · ');
+
+    const hint = [];
+    const items = sources();
+    if (items.length > 1) hint.push(`按 ${items.map((x) => x.key).join(' / ')} 直接选`);
+    hint.push('Enter 确认');
+    if (s.hide) hint.push(s.hide + ' 收起');
+    pickerHint.textContent = hint.join(' · ');
+  }
+
+  /* ------------------------- 配置 ------------------------- */
+  // noAutoScan：调用方紧接着会 resetAll()，扫描交给它去做，免得连扫两遍
+  function applyConfig(cfg, noAutoScan) {
+    if (!cfg || typeof cfg !== 'object') return;
+    state.cfg = cfg;
+    applyTheme(cfg.theme || 'dark');
+    applyShortcuts();
+    if (state.pickerOpen) {
+      renderPicker();
+      // 配置比页面到得晚：刚拿到配置就只有一个数据源的话，直接把选择框换成扫描
+      if (!noAutoScan && !state.busy && !state.sourceKey && soleSource()) pickSource();
+    }
+  }
+
+  if (window.bridge) {
+    if (window.bridge.getConfig) {
+      window.bridge.getConfig().then(applyConfig).catch(() => {});
+    }
+    if (window.bridge.onConfig) {
+      window.bridge.onConfig((cfg) => { applyConfig(cfg, true); resetAll(); });
+    }
+    if (window.bridge.onReset) window.bridge.onReset(resetAll);
+  }
+
+  /* ------------------------- 交互 ------------------------- */
+  q.addEventListener('input', () => {
+    state.query = q.value;
+    if (!state.sourceKey) return;
+    filterAndRender();
+    const kw = state.query.trim();
+    if (kw) setStatus(`${state.rows.length} 个匹配 / 共 ${state.files.length} 个文件`);
+    else setStatus(`找到 ${state.files.length} 个文件`);
+  });
+
+  $('#hideBtn').addEventListener('click', hideWindow);
+  $('#reloadBtn').addEventListener('click', rescan);
+  $('#cfgBtn').addEventListener('click', () => callHost('open_config'));
+
+  function handlePickerKey(ev) {
+    const items = sources();
+    if (ev.key === 'Escape') { ev.preventDefault(); hideWindow(); return; }
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      const s = items[state.pickerSel];
+      if (s) chooseSource(s.key);
+      return;
+    }
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); movePicker(1); return; }
+    if (ev.key === 'ArrowUp') { ev.preventDefault(); movePicker(-1); return; }
+    const hit = items.find((x) => x.key === ev.key);
+    if (hit) { ev.preventDefault(); chooseSource(hit.key); }
+  }
+
+  document.addEventListener('keydown', (ev) => {
+    if (state.pickerOpen) { handlePickerKey(ev); return; }
+
+    if (matchAccel(ev, SC.hide)) { ev.preventDefault(); hideWindow(); return; }
+    if (matchAccel(ev, SC.focus)) { ev.preventDefault(); focusInput(); return; }
+    if (matchAccel(ev, SC.reload)) { ev.preventDefault(); rescan(); return; }
+    if (matchAccel(ev, SC.reveal)) { ev.preventDefault(); revealSel(); return; }
+    if (matchAccel(ev, SC.copy)) { ev.preventDefault(); copySel(); return; }
+    if (matchAccel(ev, SC.open)) { ev.preventDefault(); openSel(); return; }
+
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); setSel(state.sel + 1); return; }
+    if (ev.key === 'ArrowUp') { ev.preventDefault(); setSel(state.sel - 1); return; }
+    if (ev.key === 'PageDown') { ev.preventDefault(); setSel(state.sel + 10); return; }
+    if (ev.key === 'PageUp') { ev.preventDefault(); setSel(state.sel - 10); return; }
+  });
+
+  // 页面重新可见时把焦点放回输入框
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && !state.pickerOpen) focusInput();
+  });
+
+  applyShortcuts();
+  resetAll();
+})();
+</script>
+</body>
+</html>

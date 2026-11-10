@@ -1,0 +1,304 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<title>环境未就绪</title>
+<HTA:APPLICATION
+  ID="notice"
+  APPLICATIONNAME="PlugSetup"
+  SCROLL="no"
+  SINGLEINSTANCE="yes"
+  SYSMENU="no"
+  MAXIMIZEBUTTON="no"
+  MINIMIZEBUTTON="no"
+  INNERBORDER="no"
+  BORDER="thin"
+  CAPTION="yes"
+/>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    font-family: "Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: #ffffff;
+    color: #1f2328;
+    font-size: 13px;
+  }
+  .wrap { padding: 18px 22px 16px; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 12px; color: #1f2328; }
+  p { margin: 0 0 10px; line-height: 1.7; color: #3d444d; }
+  .hint {
+    color: #7a5c14;
+    background: #fdf6e3;
+    border: 1px solid #ecdcb4;
+    border-radius: 6px;
+    padding: 9px 11px;
+    line-height: 1.65;
+    margin: 0 0 14px;
+  }
+  #progress { display: none; margin-bottom: 14px; }
+  .track {
+    height: 6px;
+    background: #eaeef2;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  #bar { height: 100%; width: 0; background: #1f6feb; border-radius: 3px; }
+  #stage { color: #57606a; line-height: 1.6; }
+  .row { text-align: right; }
+  button {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 18px;
+    margin-left: 8px;
+    border-radius: 6px;
+    border: 1px solid #d0d7de;
+    background: #f6f8fa;
+    color: #1f2328;
+    cursor: pointer;
+  }
+  button:hover { background: #eef1f4; }
+  button:disabled { color: #9aa4ae; cursor: default; background: #f6f8fa; }
+  button.primary {
+    background: #1f6feb;
+    border-color: #1f6feb;
+    color: #ffffff;
+  }
+  button.primary:hover { background: #1a5fd0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">需要 Python 3.10 或更高版本</h1>
+  <p id="detail"></p>
+  <div class="hint" id="hint"></div>
+
+  <div id="progress">
+    <div class="track"><div id="bar"></div></div>
+    <div id="stage"></div>
+  </div>
+
+  <div class="row">
+    <button id="close">关闭</button>
+    <button id="open">打开下载页</button>
+    <button id="install" class="primary">直接下载并安装</button>
+  </div>
+</div>
+
+<script type="text/javascript">
+(function () {
+  var shell = null;
+  try { shell = new ActiveXObject("WScript.Shell"); } catch (e) {}
+
+  function herePath() {
+    var p = "";
+    try { p = decodeURI(String(document.location.href || "")); } catch (e) { p = String(document.location.href || ""); }
+    p = p.replace(/^file:\/{2,3}/i, "").replace(/\//g, "\\");
+    return p.replace(/\\[^\\]*$/, "\\");
+  }
+
+  function tempPath() {
+    try { return shell.ExpandEnvironmentStrings("%TEMP%") + "\\"; } catch (e) { return ""; }
+  }
+
+  var stateFile = tempPath() + "plug_python_install.state";
+  var psScript = herePath() + "install_python.ps1";
+
+  var mode = "missing";
+  try {
+    var parts = String(commandLine).split(/\s+/);
+    for (var i = parts.length - 1; i >= 0; i--) {
+      var token = parts[i].replace(/"/g, "").toLowerCase();
+      if (token === "missing" || token === "old" || token === "deps") { mode = token; break; }
+    }
+  } catch (e) {}
+
+  var copy = {
+    missing: {
+      title: "需要先安装 Python 3.10 或更高版本",
+      detail: "管理器找不到 Python，界面和依赖都无法启动。Python 需要单独安装，pip 装不上它自己。",
+      hint: "可以直接点下面安装：脚本会下载官方安装包（约 32 MB），校验数字签名后按当前用户安装，并把 python 加入 PATH。"
+    },
+    old: {
+      title: "Python 版本过低",
+      detail: "当前的 Python 低于 3.10，管理器无法启动。请先安装 Python 3.10 或更高版本。",
+      hint: "可以直接点下面安装：装好后请删除 manager 目录下的 .venv 文件夹，再双击启动脚本让它按新解释器重建环境。"
+    },
+    deps: {
+      title: "依赖安装失败",
+      detail: "Python 已经就位，但 requirements.txt 里的依赖没装上，通常是网络、代理或镜像源的问题。",
+      hint: "确认这台机器能访问 PyPI 后，重新双击启动脚本即可再试一次。"
+    }
+  }[mode];
+
+  var elTitle = document.getElementById("title");
+  var elDetail = document.getElementById("detail");
+  var elHint = document.getElementById("hint");
+  var elProgress = document.getElementById("progress");
+  var elBar = document.getElementById("bar");
+  var elStage = document.getElementById("stage");
+  var btnClose = document.getElementById("close");
+  var btnOpen = document.getElementById("open");
+  var btnInstall = document.getElementById("install");
+
+  elTitle.innerHTML = copy.title;
+  elDetail.innerHTML = copy.detail;
+  elHint.innerHTML = copy.hint;
+  document.title = copy.title;
+
+  if (mode === "deps") {
+    btnInstall.style.display = "none";
+    btnOpen.style.display = "none";
+  }
+
+  function openDownloadPage() {
+    try { shell.Run("https://www.python.org/downloads/windows/"); } catch (e) {}
+  }
+
+  btnOpen.onclick = openDownloadPage;
+  btnClose.onclick = function () { window.close(); };
+  btnClose.focus();
+
+  function readState() {
+    try {
+      var fso = new ActiveXObject("Scripting.FileSystemObject");
+      if (!fso.FileExists(stateFile)) { return null; }
+      var file = fso.OpenTextFile(stateFile, 1, false);
+      var text = file.AtEndOfStream ? "" : file.ReadAll();
+      file.Close();
+      var out = {};
+      var lines = String(text).replace(/\r/g, "").split("\n");
+      for (var i = 0; i < lines.length; i++) {
+        var at = lines[i].indexOf("=");
+        if (at > 0) { out[lines[i].substring(0, at)] = lines[i].substring(at + 1); }
+      }
+      return out;
+    } catch (e) { return null; }
+  }
+
+  function clearState() {
+    try {
+      var fso = new ActiveXObject("Scripting.FileSystemObject");
+      if (fso.FileExists(stateFile)) { fso.DeleteFile(stateFile, true); }
+    } catch (e) {}
+  }
+
+  function mb(bytes) {
+    var n = Number(bytes);
+    if (!n || isNaN(n)) { return "0.0"; }
+    return (n / 1048576).toFixed(1);
+  }
+
+  var timer = null;
+  var startedAt = 0;
+  var finished = false;
+
+  function stopPolling() {
+    if (timer) { clearInterval(timer); timer = null; }
+  }
+
+  function showFail(message) {
+    finished = true;
+    stopPolling();
+    elProgress.style.display = "block";
+    elBar.style.width = "0";
+    elStage.innerHTML = message + "。可以点「打开下载页」手动安装，或「重试」再走一次。";
+    btnInstall.innerHTML = "重试";
+    btnInstall.disabled = false;
+    btnOpen.style.display = "";
+    btnClose.disabled = false;
+    btnClose.focus();
+  }
+
+  function showDone(version, message) {
+    finished = true;
+    stopPolling();
+    elBar.style.width = "100%";
+    var extra = (mode === "old")
+      ? "请删除 manager 目录下的 .venv 文件夹，再双击启动脚本。"
+      : "重新双击启动脚本即可。";
+    elProgress.style.display = "block";
+    elStage.innerHTML = "Python " + (version || "") + " 安装完成。" + extra;
+    btnInstall.style.display = "none";
+    btnOpen.style.display = "none";
+    btnClose.disabled = false;
+    btnClose.focus();
+    if (message) {
+      elTitle.innerHTML = "Python 已安装";
+      document.title = "安装完成";
+    }
+  }
+
+  function poll() {
+    if (finished) { return; }
+    var st = readState();
+    if (!st || !st.stage) {
+      if (startedAt && (new Date().getTime() - startedAt > 12000)) {
+        showFail("启动不了 PowerShell，可能被这台机器的执行策略挡住了");
+      }
+      return;
+    }
+
+    var version = st.version || "";
+    if (st.stage === "resolve") {
+      elStage.innerHTML = "正在确认可用的 Python 版本…";
+    } else if (st.stage === "download") {
+      var done = Number(st.done) || 0;
+      var total = Number(st.total) || 0;
+      if (total > 0) {
+        elBar.style.width = Math.min(100, Math.round(done / total * 100)) + "%";
+        elStage.innerHTML = "正在下载 Python " + version + "（" + mb(done) + " / " + mb(total) + " MB）…";
+      } else {
+        elStage.innerHTML = "正在下载 Python " + version + "…";
+      }
+    } else if (st.stage === "verify") {
+      elBar.style.width = "100%";
+      elStage.innerHTML = "正在校验安装包的数字签名…";
+    } else if (st.stage === "install") {
+      elBar.style.width = "100%";
+      elStage.innerHTML = "正在安装，会弹出一个安装进度窗口，期间请不要关闭本窗口…";
+    } else if (st.stage === "done") {
+      var parsed = String(st.message || "");
+      var installed = parsed.indexOf("installed:") === 0 ? parsed.substring(10) : version;
+      showDone(installed, parsed);
+    } else if (st.stage === "failed") {
+      var reason = String(st.message || "");
+      var text = "安装没有完成";
+      if (reason.indexOf("download_failed") === 0) { text = "下载没成功，可能是网络或代理拦住了"; }
+      else if (reason.indexOf("bad_signature") === 0) { text = "安装包签名校验没通过，已停止且没有执行安装"; }
+      else if (reason.indexOf("install_failed") === 0) { text = "安装程序返回了失败"; }
+      showFail(text);
+    }
+  }
+
+  btnInstall.onclick = function () {
+    if (finished) {
+      finished = false;
+      clearState();
+    }
+    btnInstall.disabled = true;
+    btnInstall.innerHTML = "安装中…";
+    btnOpen.style.display = "none";
+    btnClose.disabled = true;
+    elProgress.style.display = "block";
+    elBar.style.width = "0";
+    elStage.innerHTML = "正在确认可用的 Python 版本…";
+
+    clearState();
+    startedAt = new Date().getTime();
+    try {
+      var cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + psScript + '"';
+      shell.Run(cmd, 0, false);
+    } catch (e) {
+      showFail("启动不了 PowerShell");
+      return;
+    }
+    stopPolling();
+    timer = setInterval(poll, 700);
+  };
+
+  try { window.resizeTo(500, mode === "deps" ? 250 : 320); } catch (e) {}
+})();
+</script>
+</body>
+</html>

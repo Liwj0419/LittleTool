@@ -1,0 +1,35 @@
+{
+  "tool": { "mode": "resident" },
+  // 中文名：Manager 用它显示这个软件（英文名就是文件夹名）
+  "appName": "Excel 数据查看器",
+  // 窗口尺寸（只影响首次启动，之后会记住你调过的尺寸）
+  "window": { "width": 1100, "height": 680, "minWidth": 820, "minHeight": 520 },
+
+  // 快捷键。留空、删掉整行或者注释掉，就表示不用这个快捷键。
+  // 支持 Ctrl / Alt / Shift / Win 组合；键名可用字母、数字、Esc、Enter、
+  // F1-F12、Space、Tab、Up / Down / Left / Right、Home / End / PageUp / PageDown 等。
+  "shortcuts": {
+    "global":    "Ctrl+Alt+E",     // 全局唤出窗口（任何程序在前台都有效）
+    "hide":      "Esc",            // 收起窗口
+    "open":      "Ctrl+O",         // 选择文件
+    "search":    "Ctrl+F",         // 光标跳到搜索框
+    "reload":    "F5",             // 重新读取当前文件
+    "selectAll": "Ctrl+A",         // 全选整张表
+    "copy":      "Ctrl+C"          // 复制框选的区域
+  },
+
+  // 按 Esc 的行为：
+  //   "close"   = 直接收进托盘（不管当前有没有选区 / 搜索 / 弹窗）
+  //   "layered" = 一层一层退：弹窗 -> 下拉 -> 选区 -> 清搜索 -> 收进托盘
+  "esc": "close",
+
+  // 单实例通信端口（被占用时自动往后找）。别的程序靠它把文件投进这个窗口。
+  "port": 47653,
+
+  // 大文件保护：单表最多读多少行、每次往页面送多少行
+  "maxRows": 200000,
+  "pageRows": 2000,
+
+  // 「历史」菜单最多记几条
+  "maxRecent": 8
+}

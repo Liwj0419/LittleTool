@@ -1,0 +1,3 @@
+# Window and global hotkey; no tray dependency.
+pywebview>=6.2
+pynput>=1.8

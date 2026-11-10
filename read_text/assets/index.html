@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>read_text</title>
+<style>
+  html, body {
+    --text-2: #f2f2f2;
+    margin: 0; padding: 0;
+    background: #101010;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  }
+  #bg {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    object-fit: fill;
+    pointer-events: none;
+    -webkit-user-drag: none;
+  }
+  #layer { position: absolute; left: 0; top: 0; right: 0; bottom: 0; }
+
+  /* 文字块只当"透明命中盒"用：文字本身不画出来，选中高亮由 .sel 画。
+     不用浏览器原生文本选择（它会按字形排版算命中，淡/小的字抓不住，
+     拖到末尾还会一路选到底）——见下面的几何选区。 */
+  .w {
+    position: absolute;
+    color: transparent;
+    background: transparent;
+    cursor: text;
+    white-space: pre;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    line-height: 1;
+  }
+
+  /* padding 1 + margin -1：高亮比字块本身宽出一圈，淡字小字也看得见选中了 */
+  .w.sel {
+    background: linear-gradient(to right,
+      transparent var(--sel-start),
+      var(--sel, rgba(0, 120, 215, 0.32)) var(--sel-start) var(--sel-end),
+      transparent var(--sel-end));
+    padding: 1px;
+    margin: -1px;
+    border-radius: 2px;
+  }
+
+  #hint {
+    position: fixed;
+    left: 50%;
+    top: 8px;
+    transform: translateX(-50%);
+    max-width: calc(92vw - 78px);   /* 右边要给关闭按钮留位置 */
+    padding: 7px 14px;
+    border-radius: 9px;
+    background: rgba(20, 20, 20, 0.82);
+    color: #f2f2f2;
+    font-size: 13px;
+    line-height: 1.5;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    pointer-events: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    z-index: 9;
+  }
+  #hint.on { opacity: 1; }
+
+  /* 关闭按钮：覆盖层没有标题栏，这颗是唯一的可见出口（Esc 照旧可用） */
+  #ovClose {
+    position: fixed;
+    right: 8px;
+    top: 8px;
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(20, 20, 20, 0.55);
+    color: var(--text-2);
+    cursor: pointer;
+    z-index: 10;
+    transition: background 0.14s ease, transform 0.08s ease;
+  }
+  #ovClose:hover { background: #e5484d; }
+  #ovClose:active { transform: scale(0.92); }
+  #ovClose svg { display: block; }
+</style>
+</head>
+<body>
+  <img id="bg" alt="">
+  <div id="layer"></div>
+  <div id="hint"></div>
+  <button id="ovClose" title="关闭" aria-label="关闭">
+    <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5"/></svg>
+  </button>
+
+<script>
+(function () {
+  var CFG = {};
+  var hintEl = document.getElementById('hint');
+  var bgEl = document.getElementById('bg');
+  var hintTimer = 0;
+
+  // 文字块保留 OCR 坐标与间距。选区按字符编号，每个编号指回所在的文字块。
+  var WORDS = [];
+  var UNITS = [];
+  var selFrom = -1;
+  var selTo = -1;
+  var dragging = false;
+  var charMetrics = document.createElement('canvas').getContext('2d');
+  charMetrics.font = '100px "Segoe UI"';
+  var charWidths = {};
+  var inkCanvas = document.createElement('canvas');
+  var inkContext = inkCanvas.getContext('2d', { willReadFrequently: true });
+
+  // 截图的物理像素尺寸，由 __render 的 payload 带进来
+  var PHYS = { w: 0, h: 0 };
+
+  // 鼠标离最近的文字块超过这么多 CSS 像素就不跟着动了，
+  // 免得手抖拖到空白处、选区一下跳到别的段落
+  var SNAP = 48;
+
+  function api() {
+    return (window.pywebview && window.pywebview.api) || null;
+  }
+
+  // 截图是物理像素，页面按 CSS 像素排版，用图片自然宽度反推缩放比，
+  // 不依赖 devicePixelRatio（它在 WebView2 里未必等于系统缩放）。
+  // 优先用 Python 传进来的截图尺寸：__render 可能在背景图还没解码完时就到了，
+  // 那种时候 naturalWidth 是 0，退回 dpr 会把缩放比算错，所有字块整体错位、点不中。
+  function physToCss() {
+    var iw = window.innerWidth || 0;
+    if (!iw) return window.devicePixelRatio || 1;
+    if (PHYS.w > 0) return PHYS.w / iw;
+    if (bgEl && bgEl.naturalWidth > 0) return bgEl.naturalWidth / iw;
+    return window.devicePixelRatio || 1;
+  }
+
+  function showHint(text, ms) {
+    clearTimeout(hintTimer);
+    if (!text) {
+      hintEl.classList.remove('on');
+      hintEl.textContent = '';
+      return;
+    }
+    hintEl.textContent = text;
+    hintEl.style.background = CFG.hintColor || 'rgba(20,20,20,0.82)';
+    hintEl.classList.add('on');
+    if (ms === 0) return;   // 0 = 常驻，等下一次提示把它换掉
+    hintTimer = setTimeout(function () {
+      hintEl.classList.remove('on');
+    }, ms || 2600);
+  }
+
+  var KEY_ALIAS = { esc: 'escape', enter: 'enter', space: ' ', del: 'delete', delete: 'delete' };
+
+  // 配置里的 "Ctrl+C" 这种写法直接在页面里生效，不写死在代码里
+  function matchShortcut(spec, e) {
+    if (!spec) return false;
+    var parts = String(spec).split('+').map(function (s) { return s.trim().toLowerCase(); }).filter(Boolean);
+    if (!parts.length) return false;
+    var raw = parts[parts.length - 1];
+    var key = KEY_ALIAS[raw] || raw;
+    var needCtrl = parts.indexOf('ctrl') >= 0 || parts.indexOf('control') >= 0;
+    var needAlt = parts.indexOf('alt') >= 0;
+    var needShift = parts.indexOf('shift') >= 0;
+    var hasCtrl = e.ctrlKey || e.metaKey;
+    if (needCtrl !== hasCtrl) return false;
+    if (needAlt !== e.altKey) return false;
+    if (needShift !== e.shiftKey) return false;
+    return String(e.key).toLowerCase() === key;
+  }
+
+  window.__setBg = function (url) {
+    if (!url) return false;
+    bgEl.src = url;
+    return true;
+  };
+
+  // 背景图分块灌入。单条几 MB 的 data URL 脚本会让 WebView2 的 renderer
+  // 长时间不响应，那段时间页面里 keydown / mousedown 只能排队——表现就是
+  // 「图出来了、提示条也在，但按键和鼠标全都没反应」。
+  var BG_PARTS = [];
+  window.__bgBegin = function () {
+    BG_PARTS = [];
+    return true;
+  };
+  window.__bgPush = function (part) {
+    BG_PARTS.push(part);
+    return BG_PARTS.length;
+  };
+  window.__bgEnd = function () {
+    var url = BG_PARTS.join('');
+    BG_PARTS = [];
+    if (!url) return false;
+    bgEl.src = url;
+    return true;
+  };
+
+  // ------------------------------------------------------------------ 选区
+
+  // OCR 只有整块坐标。用字形相对宽度在块内定位，保留非 ASCII 字块的原有粒度。
+  function characterEdges(text) {
+    if (text.length < 2 || !/^[\x20-\x7e]+$/.test(text)) return [0, 1];
+    var edges = [0];
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (charWidths[ch] === undefined) charWidths[ch] = charMetrics.measureText(ch).width;
+      edges.push(edges[i] + charWidths[ch]);
+    }
+    var width = edges[edges.length - 1];
+    return edges.map(function (edge) { return edge / width; });
+  }
+
+  // 只在命中一个英文块时采样原图。字形之间的低对比度列可以校准字宽估算。
+  function imageGaps(word) {
+    var left = Math.max(0, Math.floor(word.px));
+    var top = Math.max(0, Math.floor(word.py) - 1);
+    var width = Math.min(bgEl.naturalWidth, Math.ceil(word.px + word.pw)) - left;
+    var height = Math.min(bgEl.naturalHeight, Math.ceil(word.py + word.ph) + 1) - top;
+    if (width < 2 || height < 2) return [];
+    inkCanvas.width = width;
+    inkCanvas.height = height;
+    var pixels;
+    try {
+      inkContext.drawImage(bgEl, left, top, width, height, 0, 0, width, height);
+      pixels = inkContext.getImageData(0, 0, width, height).data;
+    } catch (e) {
+      return [];
+    }
+
+    var strength = new Float32Array(width);
+    var peak = 0;
+    for (var x = 0; x < width; x++) {
+      var low = 255, high = 0;
+      for (var y = 0; y < height; y++) {
+        var p = (y * width + x) * 4;
+        var light = (pixels[p] + 2 * pixels[p + 1] + pixels[p + 2]) / 4;
+        low = Math.min(low, light);
+        high = Math.max(high, light);
+      }
+      strength[x] = high - low;
+      peak = Math.max(peak, strength[x]);
+    }
+
+    var threshold = Math.max(12, peak * 0.25);
+    var gaps = [];
+    var quiet = -1;
+    for (var x = 0; x < width; x++) {
+      if (strength[x] < threshold) {
+        if (quiet < 0) quiet = x;
+      } else {
+        if (quiet > 0) gaps.push((left + (quiet + x) / 2 - word.px) / word.pw);
+        quiet = -1;
+      }
+    }
+    return gaps;
+  }
+
+  // 搜索半个相邻字符宽度内的字缝，让切分点不会交叉或吸附到同一处。
+  function snapEdges(guess, gaps) {
+    var edges = guess.slice();
+    var score = 0;
+    var nearest = 0;
+    for (var i = 1; i < guess.length - 1; i++) {
+      var edge = guess[i];
+      while (nearest + 1 < gaps.length &&
+             Math.abs(gaps[nearest + 1] - edge) < Math.abs(gaps[nearest] - edge)) nearest++;
+      var distance = Math.abs(gaps[nearest] - edge);
+      var radius = Math.min(edge - guess[i - 1], guess[i + 1] - edge) / 2;
+      if (distance < radius) {
+        edges[i] = gaps[nearest];
+        score += 1 - distance / radius;
+      }
+    }
+    return { edges: edges, score: score };
+  }
+
+  function measureWord(word) {
+    if (word.measured || word.edges.length <= 2 || !bgEl.complete || !bgEl.naturalWidth) return;
+    word.measured = true;
+    var gaps = imageGaps(word);
+    if (!gaps.length) return;
+    var proportional = snapEdges(word.edges, gaps);
+    var even = word.edges.map(function (_, i) { return i / (word.edges.length - 1); });
+    var monospace = snapEdges(even, gaps);
+    word.edges = monospace.score > proportional.score ? monospace.edges : proportional.edges;
+  }
+
+  function unitAt(word, x) {
+    measureWord(word);
+    var fraction = (x - word.x) / word.w;
+    var offset = 0;
+    while (offset < word.edges.length - 2 && fraction >= word.edges[offset + 1]) offset++;
+    return word.start + offset;
+  }
+
+  function unitCenter(index) {
+    var word = UNITS[index];
+    var offset = index - word.start;
+    return word.x + word.w * (word.edges[offset] + word.edges[offset + 1]) / 2;
+  }
+
+  // 点到矩形的距离：在盒子里就是 0，否则算到最近边的距离
+  function distTo(w, x, y) {
+    var dx = Math.max(w.x - x, 0, x - (w.x + w.w));
+    var dy = Math.max(w.y - y, 0, y - (w.y + w.h));
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // 离 (x,y) 最近的文字块；onlyLine 不为 null 时只在那一行里找
+  function nearestWord(x, y, maxDist, onlyLine) {
+    var best = -1;
+    var bestD = Infinity;
+    for (var i = 0; i < WORDS.length; i++) {
+      var w = WORDS[i];
+      if (onlyLine !== null && onlyLine !== undefined && w.line !== onlyLine) continue;
+      var d = distTo(w, x, y);
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    if (best < 0) return -1;
+    return bestD <= maxDist ? best : -1;
+  }
+
+  function paint() {
+    if (selFrom < 0 || selTo < 0) return;
+    var a = Math.min(selFrom, selTo);
+    var b = Math.max(selFrom, selTo) + 1;
+    measureWord(UNITS[a]);
+    measureWord(UNITS[b - 1]);
+    for (var i = 0; i < WORDS.length; i++) {
+      var word = WORDS[i];
+      var start = Math.max(0, a - word.start);
+      var end = Math.min(word.edges.length - 1, b - word.start);
+      if (start < end) {
+        word.el.style.setProperty('--sel-start', (100 * word.edges[start]) + '%');
+        word.el.style.setProperty('--sel-end', (100 * word.edges[end]) + '%');
+        word.el.classList.add('sel');
+      } else {
+        word.el.classList.remove('sel');
+      }
+    }
+  }
+
+  function clearSelection() {
+    selFrom = -1;
+    selTo = -1;
+    for (var i = 0; i < WORDS.length; i++) {
+      WORDS[i].el.classList.remove('sel');
+    }
+  }
+
+  window.__serialize = function () {
+    if (selFrom < 0 || selTo < 0) return '';
+    var a = Math.min(selFrom, selTo);
+    var b = Math.max(selFrom, selTo) + 1;
+
+    var byLine = {};
+    for (var i = UNITS[a].index; i <= UNITS[b - 1].index; i++) {
+      var w = WORDS[i];
+      (byLine[w.line] = byLine[w.line] || []).push(w);
+    }
+
+    var joinGap = typeof CFG.joinGap === 'number' ? CFG.joinGap : 0.28;
+    var keys = Object.keys(byLine).map(Number).sort(function (p, q) { return p - q; });
+    var out = [];
+
+    for (var k = 0; k < keys.length; k++) {
+      var arr = byLine[keys[k]].sort(function (p, q) { return p.x - q.x; });
+      var buf = '';
+      var prev = null;
+      for (var m = 0; m < arr.length; m++) {
+        var cur = arr[m];
+        if (prev && !cur.continuesPath) {
+          var gap = cur.x - (prev.x + prev.w);
+          var unit = Math.max(prev.joinRight, cur.joinLeft);
+          if (gap > unit * joinGap) buf += ' ';
+        }
+        var start = Math.max(0, a - cur.start);
+        var end = Math.min(cur.edges.length - 1, b - cur.start);
+        buf += cur.edges.length === 2 ? cur.t : cur.t.slice(start, end);
+        prev = cur;
+      }
+      out.push(buf);
+    }
+    return out.join('\n');
+  };
+
+  window.__selectAll = function () {
+    if (!UNITS.length) return;
+    selFrom = 0;
+    selTo = UNITS.length - 1;
+    paint();
+    refreshHint();
+  };
+
+  // ------------------------------------------------------------------ 渲染
+
+  // 把每个字按 OCR 坐标摆上去：文字透明，只留一个可命中的盒子。
+  window.__render = function (payload) {
+    CFG = payload.cfg || {};
+    PHYS.w = payload.bgW || 0;
+    PHYS.h = payload.bgH || 0;
+    var layer = document.getElementById('layer');
+    layer.innerHTML = '';
+    WORDS = [];
+    UNITS = [];
+    selFrom = -1;
+    selTo = -1;
+    dragging = false;
+
+    if (CFG.selectionColor) {
+      document.documentElement.style.setProperty('--sel', CFG.selectionColor);
+    }
+
+    var lines = payload.lines || [];
+    for (var li = 0; li < lines.length; li++) {
+      var words = lines[li] || [];
+      for (var wi = 0; wi < words.length; wi++) {
+        var w = words[wi];
+        if (!w || !w.text) continue;
+        var s = document.createElement('span');
+        s.className = 'w';
+        s.textContent = w.text;
+        layer.appendChild(s);
+        var edges = characterEdges(w.text);
+        var word = {
+          el: s, index: WORDS.length, line: li, start: UNITS.length, edges: edges,
+          px: w.x, py: w.y, pw: w.w, ph: w.h, t: w.text,
+          joinLeftPx: w.join_left, joinRightPx: w.join_right, continuesPath: w.continues_path
+        };
+        WORDS.push(word);
+        for (var i = 1; i < edges.length; i++) UNITS.push(word);
+      }
+    }
+    layout();
+
+    showHint(CFG.showHint && WORDS.length ? CFG.hintText : '', 0);
+    try { window.focus(); } catch (e) {}
+    return WORDS.length;
+  };
+
+  // 只算位置，不改内容：窗口尺寸/缩放比变了可以整个重排一遍
+  function layout() {
+    var k = 1 / physToCss();
+    for (var i = 0; i < WORDS.length; i++) {
+      var wd = WORDS[i];
+      var cw = Math.max(3, wd.pw * k);
+      var ch = Math.max(5, wd.ph * k);
+      wd.x = wd.px * k;
+      wd.y = wd.py * k;
+      wd.w = cw;
+      wd.h = ch;
+      wd.joinLeft = Math.max(3, (wd.joinLeftPx ?? wd.pw) * k);
+      wd.joinRight = Math.max(3, (wd.joinRightPx ?? wd.pw) * k);
+      var st = wd.el.style;
+      st.left = wd.x + 'px';
+      st.top = wd.y + 'px';
+      st.width = cw + 'px';
+      st.height = ch + 'px';
+      st.fontSize = Math.max(5, ch) + 'px';
+    }
+  }
+
+  // 窗口尺寸晚于首次渲染才定下来（DPI 切换 / 显示设置变化）时自纠正
+  window.addEventListener('resize', function () {
+    if (WORDS.length) layout();
+  });
+  if (bgEl) {
+    bgEl.addEventListener('load', function () {
+      if (WORDS.length) layout();
+    });
+  }
+
+  // 给 Python 侧写日志用：下次再出问题，一眼能看出是焦点、缩放还是图没解码
+  window.__diag = function () {
+    return JSON.stringify({
+      iw: window.innerWidth,
+      ih: window.innerHeight,
+      dpr: window.devicePixelRatio,
+      nw: (bgEl && bgEl.naturalWidth) || 0,
+      phys: PHYS.w + 'x' + PHYS.h,
+      k: Math.round((1 / physToCss()) * 1000) / 1000,
+      n: WORDS.length,
+      focus: document.hasFocus(),
+      vis: document.visibilityState
+    });
+  };
+
+  window.__message = function (text, ms) {
+    showHint(text, ms === undefined ? 0 : ms);
+  };
+
+  // ------------------------------------------------------------------ 交互
+
+  document.addEventListener('mousedown', function (e) {
+    if (e.button !== 0) return;
+    // 右上角的关闭按钮不属于"选字区域"，别让下面的选区逻辑把它当成点空白
+    if (e.target && e.target.closest && e.target.closest('#ovClose')) return;
+    e.preventDefault();   // 不让浏览器自己起原生选区
+
+    var idx = nearestWord(e.clientX, e.clientY, SNAP, null);
+    if (idx < 0) {        // 点空白（离文字太远）：只清选区，不关窗
+      clearSelection();
+      if (CFG.showHint && CFG.hintText) showHint(CFG.hintText, 0);
+      return;
+    }
+    dragging = true;
+    selFrom = unitAt(WORDS[idx], e.clientX);
+    selTo = selFrom;
+    paint();
+    if (CFG.showHint) {
+      showHint('拖动选择文字，按 ' + (CFG.copy || 'Ctrl+C') + ' 复制；' + (CFG.cancel || 'Esc') + ' 退出', 0);
+    }
+  });
+
+  document.addEventListener('mousemove', function (e) {
+    if (!dragging) return;
+    if (e.buttons === 0) {   // 在窗口外松的手，收不到 mouseup
+      finishDrag();
+      return;
+    }
+    var anchor = UNITS[selFrom];
+    if (!anchor) return;
+
+    // 鼠标还在起始词那一条的高度范围内，就只在这一行里找端点：
+    // 顺着行往右拖不会突然跨到下一行、把下面整片都带上；
+    // 上下离开这条带子才切到别的行（多行选择照旧）。
+    var pad = Math.max(2, anchor.h * 0.35);
+    var sameLine = e.clientY >= anchor.y - pad && e.clientY <= anchor.y + anchor.h + pad;
+    var idx = nearestWord(e.clientX, e.clientY, Infinity, sameLine ? anchor.line : null);
+
+    if (idx < 0) return;
+    var end = unitAt(WORDS[idx], e.clientX);
+    if (end === selTo) return;
+    selTo = end;
+    paint();
+  });
+
+  function finishDrag() {
+    dragging = false;
+    var client = api();
+    if (!client) return;
+    if (CFG.copyOnRelease === true) {
+      var text = window.__serialize();
+      if (!text) return;
+      client.copy(text).then(function (ok) {
+        if (ok) clearSelection();
+        else showHint('复制失败，请按复制快捷键重试；Esc 退出', 0);
+      });
+      return;
+    }
+    // 默认行为：只选中，不复制也不收起，等你按 Ctrl+C 或 Esc
+    refreshHint();
+  }
+
+  document.addEventListener('mouseup', function (e) {
+    if (e.button !== 0) return;
+    var client = api();
+    if (!client) return;
+
+    if (!dragging) {
+      // 没在拖：点空白是否关窗由配置决定
+      if (CFG.closeOnOutsideClick === true && selFrom < 0) client.cancel();
+      return;
+    }
+    finishDrag();
+  });
+
+  // 用捕获阶段挂在 window 上：不管焦点在哪个元素（哪怕以后加了输入框），
+  // 取消键都要最先被这里拿到。窗口有焦点时这就是主路径；
+  // Python 侧那份只在 renderer 卡死、keydown 进不来时接手，且要求覆盖层是前台窗口。
+  window.addEventListener('keydown', function (e) {
+    var client = api();
+    if (!client) return;
+
+    if (matchShortcut(CFG.cancel || 'Esc', e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      client.cancel();
+      return;
+    }
+    if (matchShortcut(CFG.all || 'Ctrl+A', e)) {
+      e.preventDefault();
+      window.__selectAll();
+      return;
+    }
+    if (matchShortcut(CFG.copy || 'Ctrl+C', e)) {
+      var text = window.__serialize();
+      if (text) {
+        e.preventDefault();
+        client.copy(text);
+      }
+      return;
+    }
+    // 方向键微调选区：淡字/小字拖不准时用得上
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft' ||
+        e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (selFrom < 0 || selTo < 0) return;
+      e.preventDefault();
+      var line = UNITS[selTo].line;
+      if (e.key === 'ArrowRight') selTo = Math.min(UNITS.length - 1, selTo + 1);
+      else if (e.key === 'ArrowLeft') selTo = Math.max(0, selTo - 1);
+      else selTo = nextLine(line, e.key === 'ArrowDown' ? 1 : -1, unitCenter(selTo));
+      paint();
+      refreshHint();
+    }
+  }, true);
+
+  // 跳到上/下一行（行号可能不连续）里 x 最接近的那个字
+  function nextLine(line, dir, x) {
+    var target = null;
+    for (var i = 0; i < WORDS.length; i++) {
+      var w = WORDS[i];
+      if (dir > 0 ? w.line > line : w.line < line) {
+        if (target === null || (dir > 0 ? w.line < target : w.line > target)) target = w.line;
+      }
+    }
+    if (target === null) return selTo;
+    var best = -1;
+    var bestD = Infinity;
+    for (var j = 0; j < WORDS.length; j++) {
+      var v = WORDS[j];
+      if (v.line !== target) continue;
+      var d = Math.max(v.x - x, 0, x - (v.x + v.w));
+      if (d < bestD) { bestD = d; best = j; }
+    }
+    return best < 0 ? selTo : unitAt(WORDS[best], x);
+  }
+
+  function refreshHint() {
+    if (!CFG.showHint) return;
+    var text = window.__serialize();
+    if (!text) return;
+    showHint('已选中 ' + text.length + ' 个字符，按 ' + (CFG.copy || 'Ctrl+C') + ' 复制', 0);
+  }
+
+  // 关闭按钮 = 取消键，走同一条路（Python 侧的日志能看出是谁关的）
+  var closeBtn = document.getElementById('ovClose');
+  if (closeBtn) {
+    closeBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    closeBtn.addEventListener('click', function () {
+      var client = api();
+      if (client) client.cancel();
+    });
+  }
+
+  document.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>翻译</title>
+<style>
+  :root{
+    --bg:#0f1114;
+    --panel:#15181d;
+    --panel-2:#1a1e24;
+    --line:#242830;
+    --text:#e9ecf1;
+    --text-2:#b9c0cb;
+    --muted:#6f7885;
+    --accent:#5b9cff;
+    --accent-soft:rgba(91,156,255,.13);
+    --danger:#ff7a7a;
+    --radius:10px;
+    /* 窗口描边：亮主题用深灰细线，压在白底上刚好收边 */
+    --edge:rgba(17,20,26,.16);
+    --edge-hi:rgba(255,255,255,.9);
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#fbfbfc;
+      --panel:#ffffff;
+      --panel-2:#f4f5f7;
+      --line:#e6e8ec;
+      --text:#1a1d21;
+      --text-2:#454b54;
+      --muted:#8b929c;
+      --accent:#2f6fed;
+      --accent-soft:rgba(47,111,237,.09);
+      --danger:#d94a4a;
+    }
+  }
+  html.light{
+    --bg:#fbfbfc;
+    --panel:#ffffff;
+    --panel-2:#f4f5f7;
+    --line:#e6e8ec;
+    --text:#1a1d21;
+    --text-2:#454b54;
+    --muted:#8b929c;
+    --accent:#2f6fed;
+    --accent-soft:rgba(47,111,237,.09);
+    --danger:#d94a4a;
+    --edge:rgba(17,20,26,.16);
+    --edge-hi:rgba(255,255,255,.9);
+  }
+  html.dark{
+    --bg:#0f1114;
+    --panel:#15181d;
+    --panel-2:#1a1e24;
+    --line:#242830;
+    --text:#e9ecf1;
+    --text-2:#b9c0cb;
+    --muted:#6f7885;
+    --accent:#5b9cff;
+    --accent-soft:rgba(91,156,255,.13);
+    --danger:#ff7a7a;
+    /* 深色下改用浅色细线，桌面再黑也能看出边界 */
+    --edge:rgba(255,255,255,.18);
+    --edge-hi:rgba(255,255,255,.07);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font:16px/1.6 system-ui,-apple-system,"Segoe UI","Microsoft YaHei UI","PingFang SC",sans-serif;
+    overflow:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* 窗口描边：无边框窗口在桌面上没有轮廓，容易和背景糊在一起。
+     一根细线贴住窗口边缘，配一圈极淡的内高光做层次，不抢内容。 */
+  body::after{
+    content:"";
+    position:fixed;inset:0;
+    z-index:900;
+    pointer-events:none;
+    border:1.5px solid var(--edge);
+    box-shadow:inset 0 1px 0 var(--edge-hi);
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  ::selection{background:var(--accent-soft);color:var(--text)}
+
+  .app{height:100%;display:flex;flex-direction:column}
+
+  /* ---------------- 顶栏 ---------------- */
+  header{
+    height:50px;flex:0 0 50px;
+    display:flex;align-items:center;gap:12px;
+    padding:0 18px;
+    border-bottom:1px solid var(--line);
+    user-select:none;
+  }
+  .brand{
+    width:26px;height:26px;flex:0 0 26px;
+    display:grid;place-items:center;
+    border-radius:8px;
+    background:linear-gradient(145deg,#5b9cff,#3a6fd8);
+    color:#fff;font-size:13px;font-weight:600;letter-spacing:.5px;
+    box-shadow:0 1px 6px rgba(91,156,255,.35);
+  }
+  .dir{
+    display:flex;align-items:center;gap:7px;
+    font-size:13px;color:var(--muted);
+    letter-spacing:.3px;
+  }
+  .dir b{font-weight:500;color:var(--text-2)}
+  .dir .arrow{color:var(--muted);opacity:.7}
+  .dir .to{color:var(--accent);font-weight:600}
+  .grow{flex:1}
+
+  .icon-btn{
+    width:30px;height:30px;border-radius:8px;
+    display:grid;place-items:center;
+    color:var(--muted);
+    transition:background .15s,color .15s;
+  }
+  .icon-btn:hover{background:var(--panel-2);color:var(--text)}
+
+  /* ---------------- 窗口按钮（最小化 / 关闭） ---------------- */
+  /* 无边框窗口没有系统标题栏，这两个就是唯一的出口，所以要小、要清楚、要能点到 */
+  .wctl{display:flex;align-items:center;gap:2px;flex:0 0 auto;margin-left:2px}
+  .wctl button{
+    width:22px;height:22px;display:grid;place-items:center;
+    border:0;border-radius:6px;background:none;padding:0;
+    color:var(--text-2);cursor:pointer;
+    transition:background .14s,color .14s,transform .08s;
+  }
+  .wctl button:hover{background:var(--panel-2);color:var(--text)}
+  .wctl button:active{transform:scale(.92)}
+  .wctl button.close:hover{background:#e5484d;color:#fff}
+  .wctl svg{display:block}
+
+  /* ---------------- 主体 ---------------- */
+  main{flex:1;display:flex;flex-direction:column;min-height:0}
+
+  .pane{position:relative;min-height:0}
+  .pane.input{flex:1 1 44%}
+  .pane.output{flex:1 1 56%;display:flex;flex-direction:column;background:var(--panel)}
+
+  textarea{
+    width:100%;height:100%;
+    padding:20px 20px 16px;
+    background:transparent;border:0;outline:none;resize:none;
+    color:var(--text);
+    font-family:inherit;
+    font-size:16px;
+    line-height:1.75;
+    caret-color:var(--accent);
+  }
+  textarea::placeholder{color:var(--muted)}
+
+  .split{
+    position:relative;height:1px;flex:0 0 1px;
+    background:var(--line);
+  }
+  .bar{
+    position:absolute;left:0;right:0;top:0;height:1.5px;overflow:hidden;
+    opacity:0;transition:opacity .18s;
+  }
+  .bar.on{opacity:1}
+  .bar i{
+    position:absolute;top:0;height:100%;width:38%;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);
+    animation:slide 1.05s cubic-bezier(.4,0,.6,1) infinite;
+  }
+  @keyframes slide{from{left:-40%}to{left:100%}}
+
+  .out{
+    flex:1;min-height:0;
+    padding:20px 20px 52px;
+    overflow-y:auto;overflow-x:hidden;
+    font-size:16px;line-height:1.8;
+    white-space:pre-wrap;
+    word-break:break-word;
+    color:var(--text);
+  }
+  .out.err{color:var(--danger);font-size:14px}
+
+  .empty{
+    position:absolute;inset:0;
+    display:grid;place-content:center;justify-items:center;gap:7px;
+    pointer-events:none;text-align:center;
+    color:var(--muted);font-size:13.5px;
+  }
+  .empty small{font-size:12px;opacity:.72}
+
+  .copy{
+    position:absolute;right:16px;bottom:14px;
+    height:29px;padding:0 13px;border-radius:8px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--muted);font-size:12.5px;
+    opacity:0;transform:translateY(3px);
+    transition:opacity .16s,transform .16s,color .15s,border-color .15s;
+  }
+  .copy.show{opacity:.9;transform:none}
+  .copy:hover{color:var(--accent);border-color:var(--accent);opacity:1}
+
+  /* ---------------- 底栏 ---------------- */
+  footer{
+    height:32px;flex:0 0 32px;
+    display:flex;align-items:center;gap:8px;
+    padding:0 18px;
+    border-top:1px solid var(--line);
+    font-size:12px;color:var(--muted);
+    user-select:none;
+  }
+  footer .sep{opacity:.4}
+  footer #provider{opacity:.8}
+
+  /* ---------------- 菜单 ---------------- */
+  .menu{
+    position:absolute;top:46px;right:12px;z-index:20;
+    min-width:140px;padding:5px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:0 12px 32px rgba(0,0,0,.35);
+    display:none;
+  }
+  .menu.open{display:block}
+  .menu button{
+    display:flex;width:100%;align-items:center;justify-content:space-between;gap:14px;
+    padding:8px 10px;border-radius:7px;
+    font-size:13px;color:var(--text-2);text-align:left;
+  }
+  .menu button:hover{background:var(--panel-2);color:var(--text)}
+  .menu button span{font-size:11px;color:var(--muted)}
+
+  /* ---------------- 提示 ---------------- */
+  .toast{
+    position:fixed;left:50%;bottom:48px;transform:translate(-50%,8px);
+    padding:8px 15px;border-radius:20px;
+    background:var(--panel-2);border:1px solid var(--line);
+    font-size:12.5px;color:var(--text-2);
+    opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s;
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+
+  ::-webkit-scrollbar{width:9px;height:9px}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px;border:3px solid transparent;background-clip:content-box}
+  ::-webkit-scrollbar-thumb:hover{background:var(--muted);background-clip:content-box}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">译</div>
+    <div class="dir" id="dir">
+      <b id="srcLang">自动</b>
+      <span class="arrow">→</span>
+      <span class="to" id="tgtLang">中文</span>
+    </div>
+    <div class="grow"></div>
+    <button class="icon-btn" id="menuBtn" title="更多">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="3" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="8" cy="13" r="1.3"/></svg>
+    </button>
+    <div class="menu" id="menu">
+      <button data-act="hide">收起窗口 <span id="kHide">Esc</span></button>
+      <button data-act="copy">复制译文 <span id="kCopy">Ctrl+Shift+C</span></button>
+      <button data-act="clear">清空 <span id="kClear">Ctrl+L</span></button>
+    </div>
+    <div class="wctl">
+      <button id="btnMin" title="最小化" aria-label="最小化">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2 5h6"/></svg>
+      </button>
+      <button class="close" id="btnClose" title="关闭" aria-label="关闭">
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M2.5 2.5l5 5M7.5 2.5l-5 5"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main>
+    <section class="pane input">
+      <textarea id="input" spellcheck="false" autocomplete="off" placeholder="输入或粘贴文本，自动识别中英文"></textarea>
+    </section>
+
+    <div class="split"><div class="bar" id="bar"><i></i></div></div>
+
+    <section class="pane output">
+      <div class="out" id="output"></div>
+      <div class="empty" id="empty">
+        <div>译文会显示在这里</div>
+        <small id="hint1">边输入边翻译</small>
+        <small id="hint2"></small>
+      </div>
+      <button class="copy" id="copyBtn">复制</button>
+    </section>
+  </main>
+
+  <footer>
+    <span id="meta">就绪</span>
+    <span class="sep">·</span>
+    <span id="provider">MyMemory</span>
+  </footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  const theme = location.hash.replace('#', '');
+  if (theme === 'light' || theme === 'dark') document.documentElement.className = theme;
+
+  const $ = (s) => document.querySelector(s);
+  const input = $('#input');
+  const output = $('#output');
+  const empty = $('#empty');
+  const bar = $('#bar');
+  const meta = $('#meta');
+  const providerEl = $('#provider');
+  const srcLangEl = $('#srcLang');
+  const tgtLangEl = $('#tgtLang');
+  const copyBtn = $('#copyBtn');
+  const menu = $('#menu');
+  const toastEl = $('#toast');
+
+  /* ------------------------- 宿主桥（pywebview） ------------------------- */
+  // 宿主是 Python 那边，window.pywebview.api.* 由 pywebview 注入。
+  // 这里把它包成 window.bridge，页面其余部分不用关心底层是谁。
+
+  const resetFns = [];
+  const configFns = [];
+  const readyFns = [];
+  let hostApi = null;
+  let watching = false;
+
+  function bootBridge() {
+    if (hostApi) return;
+    const api = window.pywebview && window.pywebview.api;
+    if (!api || !api.get_config) return;
+    hostApi = api;
+    readyFns.splice(0).forEach((fn) => { try { fn(); } catch (e) {} });
+  }
+
+  function watchHost() {
+    if (watching) return;
+    watching = true;
+    // pywebview 的 ready 事件在文档开头就派发了，页面脚本可能错过，所以再轮询兜底
+    window.addEventListener('pywebviewready', bootBridge, { once: true });
+    let tries = 0;
+    const timer = setInterval(() => {
+      bootBridge();
+      if (hostApi || ++tries > 120) clearInterval(timer);
+    }, 50);
+  }
+
+  function whenHostReady(fn) {
+    if (hostApi) { try { fn(); } catch (e) {} return; }
+    readyFns.push(fn);
+    watchHost();
+  }
+
+  function callHost(name, ...args) {
+    if (!hostApi) return;
+    try { hostApi[name](...args); } catch (e) {}
+  }
+
+  window.bridge = {
+    hide: () => callHost('hide'),
+    minimize: () => callHost('minimize'),
+    quit: () => callHost('quit'),
+    getConfig: () => new Promise((resolve) => {
+      whenHostReady(() => {
+        Promise.resolve(hostApi.get_config()).then(resolve).catch(() => resolve(null));
+      });
+    }),
+    onReset: (fn) => resetFns.push(fn),
+    onConfig: (fn) => configFns.push(fn),
+  };
+
+  // 宿主 -> 页面：推送配置 / 每次唤起时清空
+  window.__bridgeApplyConfig = function (cfg) {
+    for (const fn of configFns) { try { fn(cfg); } catch (e) {} }
+  };
+  window.__bridgeReset = function () {
+    for (const fn of resetFns) { try { fn(); } catch (e) {} }
+  };
+
+  /* ------------------------- 窗口拖动 / 四边缩放 ------------------------- */
+  // 交给宿主的原生移动、缩放循环（WM_NCLBUTTONDOWN），比用 JS 一点点挪窗口顺滑。
+  const EDGE = 6;
+
+  function edgeAt(x, y) {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    let e = '';
+    if (y <= EDGE) e += 't';
+    else if (y >= h - EDGE) e += 'b';
+    if (x <= EDGE) e += 'l';
+    else if (x >= w - EDGE) e += 'r';
+    return e;
+  }
+
+  document.addEventListener('mousedown', (ev) => {
+    if (ev.button !== 0 || ev.detail > 1) return;
+
+    const edge = edgeAt(ev.clientX, ev.clientY);
+    if (edge) {
+      ev.preventDefault();
+      callHost('start_resize', edge);
+      return;
+    }
+
+    const t = ev.target;
+    if (!t || !t.closest) return;
+    if (t.closest('button') || t.closest('.menu') || t.closest('textarea') || t.closest('.out')) return;
+    if (ev.clientY > 50) return;          // 只认顶栏（高 50px）
+    ev.preventDefault();
+    callHost('start_drag');
+  }, true);
+
+  // 贴边时给个缩放光标，不然无边框窗口看不出哪里能拖
+  let cursorNow = '';
+  document.addEventListener('mousemove', (ev) => {
+    const e = edgeAt(ev.clientX, ev.clientY);
+    const c =
+      e === 'tl' || e === 'br' ? 'nwse-resize' :
+      e === 'tr' || e === 'bl' ? 'nesw-resize' :
+      e === 't' || e === 'b' ? 'ns-resize' :
+      e === 'l' || e === 'r' ? 'ew-resize' : '';
+    if (c !== cursorNow) {
+      cursorNow = c;
+      document.documentElement.style.cursor = c;
+    }
+  });
+
+  watchHost();
+
+  let timer = null;
+  let seq = 0;
+  let controller = null;
+  let lastResult = '';
+  let lastKey = '';
+
+  /* ------------------------- 语言识别 ------------------------- */
+  function detect(text) {
+    const cjk = (text.match(/[\u4e00-\u9fff\u3400-\u4dbf]/g) || []).length;
+    const latin = (text.match(/[A-Za-z]/g) || []).length;
+    if (!cjk && !latin) return 'en';
+    return cjk / (cjk + latin) > 0.2 ? 'zh' : 'en';
+  }
+
+  const label = (l) => (l === 'zh' ? '中文' : 'EN');
+
+  function setDir(from) {
+    const to = from === 'zh' ? 'en' : 'zh';
+    srcLangEl.textContent = label(from);
+    tgtLangEl.textContent = label(to);
+    return to;
+  }
+
+  /* ------------------------- 界面状态 ------------------------- */
+  const setLoading = (on) => bar.classList.toggle('on', on);
+
+  function showText(t) {
+    output.classList.remove('err');
+    output.textContent = t;
+    empty.style.display = 'none';
+    copyBtn.classList.toggle('show', !!t);
+  }
+
+  function showError(msg) {
+    output.classList.add('err');
+    output.textContent = msg;
+    empty.style.display = 'none';
+    copyBtn.classList.remove('show');
+  }
+
+  function showEmpty() {
+    output.textContent = '';
+    output.classList.remove('err');
+    empty.style.display = '';
+    copyBtn.classList.remove('show');
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add('on');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove('on'), 1400);
+  }
+
+  /* ------------------------- 翻译接口 ------------------------- */
+  // 等主进程从 config.json 读到服务设置后才发送翻译请求。
+  let CFG = {
+    providers: [],
+    shortcuts: {
+      global: 'Ctrl+Alt+2',
+      hide: 'Esc',
+      focus: 'Ctrl+F',
+      translate: 'Ctrl+Enter',
+      clear: 'Ctrl+L',
+      copy: 'Ctrl+Shift+C',
+    },
+  };
+
+  /** 当前生效的接口列表 */
+  function activeProviders() {
+    const list = Array.isArray(CFG.providers) ? CFG.providers : [];
+    return list.filter((p) => p && p.enabled !== false && IMPL[p.id]);
+  }
+
+  function defaultProviderName() {
+    const provider = activeProviders()[0];
+    return provider ? provider.name || provider.id : '未启用翻译服务';
+  }
+
+  function clientKey() {
+    const t = Date.now();
+    const a = new Uint8Array(16);
+    crypto.getRandomValues(a);
+    return `browser-firefox-${t}-${Array.from(a, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+  }
+
+  const normLang = (c) => {
+    const s = String(c || '').toLowerCase();
+    if (s.startsWith('zh')) return 'zh';
+    if (s.startsWith('en')) return 'en';
+    return s;
+  };
+
+  async function tencent(text, from, to, signal, cfg) {
+    const res = await fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        header: { fn: 'auto_translation', client_key: clientKey() },
+        type: 'plain',
+        model_category: 'normal',
+        source: { lang: from, text_list: [text] },
+        target: { lang: to },
+      }),
+      signal,
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    if (d?.header?.ret_code !== 'succ' || !Array.isArray(d.auto_translation)) {
+      throw new Error(d?.header?.ret_code || '无结果');
+    }
+    return {
+      text: d.auto_translation.join(''),
+      src: normLang(d.src_lang) || from,
+      provider: cfg.name || '腾讯翻译',
+    };
+  }
+
+  async function mymemory(text, from, to, signal, cfg) {
+    const lp = `${from === 'zh' ? 'zh-CN' : 'en'}|${to === 'zh' ? 'zh-CN' : 'en'}`;
+    const res = await fetch(
+      `${cfg.url}?q=${encodeURIComponent(text)}&langpair=${encodeURIComponent(lp)}`,
+      { signal }
+    );
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const d = await res.json();
+    if (Number(d?.responseStatus) !== 200) {
+      throw new Error(d?.responseDetails || '翻译服务不可用');
+    }
+    const t = d?.responseData?.translatedText;
+    if (!t) throw new Error('无结果');
+    return { text: t, src: from, provider: cfg.name || 'MyMemory' };
+  }
+
+  // MyMemory 的单次请求上限按 UTF-8 字节数计算。
+  const utf8 = new TextEncoder();
+  const IMPL = {
+    tencent: { limit: 1800, run: tencent },
+    mymemory: { limit: 480, measure: (text) => utf8.encode(text).length, run: mymemory },
+  };
+
+  /** 超长文本按句切分，单句超限时按字符拆开。 */
+  function splitText(text, max, measure = (value) => value.length) {
+    if (measure(text) <= max) return [text];
+    const units = text.match(/[^。！？!?\n]*[。！？!?\n]|[^。！？!?\n]+/g) || [text];
+    const chunks = [];
+    let current = '';
+    let size = 0;
+    for (const unit of units) {
+      const parts = measure(unit) > max ? unit : [unit];
+      for (const part of parts) {
+        const partSize = measure(part);
+        if (size + partSize > max) {
+          chunks.push(current);
+          current = '';
+          size = 0;
+        }
+        current += part;
+        size += partSize;
+      }
+    }
+    if (current) chunks.push(current);
+    return chunks;
+  }
+
+  const cache = new Map();
+
+  async function translate(text, from, to, signal) {
+    const key = `${from}>${to}|${text}`;
+    if (cache.has(key)) return cache.get(key);
+
+    const providers = activeProviders();
+    if (!providers.length) throw new Error('未启用翻译服务');
+
+    const errors = [];
+    for (const cfg of providers) {
+      const impl = IMPL[cfg.id];
+      try {
+        const parts = [];
+        let src = from;
+        let provider = '';
+        for (const chunk of splitText(text, impl.limit, impl.measure)) {
+          if (!chunk.trim()) { parts.push(chunk); continue; }
+          const r = await impl.run(chunk, from, to, signal, cfg);
+          src = r.src || src;
+          provider = r.provider;
+          parts.push(r.text);
+        }
+        const out = { text: parts.join(''), src, provider };
+        if (cache.size > 300) cache.delete(cache.keys().next().value);
+        cache.set(key, out);
+        return out;
+      } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        errors.push(e.message);
+      }
+    }
+    throw new Error(errors.join(' / ') || '翻译失败');
+  }
+
+  /* ------------------------- 读取配置 ------------------------- */
+  function applyConfig(cfg) {
+    if (!cfg || typeof cfg !== 'object') return;
+    CFG = cfg;
+    cache.clear();
+    providerEl.textContent = defaultProviderName();
+    applyShortcuts();
+  }
+
+  if (window.bridge) {
+    if (window.bridge.getConfig) {
+      window.bridge.getConfig().then(applyConfig).catch(() => {});
+    }
+    if (window.bridge.onConfig) {
+      window.bridge.onConfig((cfg) => { applyConfig(cfg); resetAll(); });
+    }
+  }
+
+  /* ------------------------- 请求流程 ------------------------- */
+  async function run(text, from, to) {
+    const key = `${from}>${to}|${text}`;
+    if (key === lastKey && lastResult) { showText(lastResult); return; }
+
+    const my = ++seq;
+    if (controller) controller.abort();
+    controller = new AbortController();
+    setLoading(true);
+
+    try {
+      const r = await translate(text, from, to, controller.signal);
+      if (my !== seq) return;
+      lastKey = key;
+      lastResult = r.text;
+      showText(r.text);
+      if (r.src) setDir(r.src);
+      meta.textContent = text.length + ' 字符';
+      providerEl.textContent = r.provider || defaultProviderName();
+    } catch (e) {
+      if (e.name === 'AbortError' || my !== seq) return;
+      showError('翻译失败：' + (e.message || '网络异常'));
+      meta.textContent = '失败';
+    } finally {
+      if (my === seq) setLoading(false);
+    }
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    const text = input.value;
+    if (!text.trim()) {
+      seq++;
+      if (controller) controller.abort();
+      setLoading(false);
+      lastKey = '';
+      lastResult = '';
+      meta.textContent = '就绪';
+      showEmpty();
+      return;
+    }
+    const from = detect(text);
+    const to = setDir(from);
+    meta.textContent = text.length + ' 字符';
+    timer = setTimeout(() => run(text, from, to), 380);
+  }
+
+  function runNow() {
+    clearTimeout(timer);
+    const text = input.value;
+    if (!text.trim()) return;
+    const from = detect(text);
+    const to = setDir(from);
+    lastKey = '';
+    run(text, from, to);
+  }
+
+  /* ------------------------- 快捷键 ------------------------- */
+  // 全部来自 config.json 的 shortcuts；没写或注释掉就等于不启用。
+
+  const KEY_ALIASES = {
+    esc: 'escape', escape: 'escape',
+    enter: 'enter', return: 'enter',
+    space: ' ',
+    del: 'delete', delete: 'delete',
+    backspace: 'backspace', tab: 'tab',
+    up: 'arrowup', down: 'arrowdown', left: 'arrowleft', right: 'arrowright',
+    home: 'home', end: 'end', pageup: 'pageup', pagedown: 'pagedown',
+    insert: 'insert',
+  };
+
+  /** "Ctrl+Shift+C" -> { ctrl, alt, shift, meta, key } */
+  function parseAccel(spec) {
+    if (typeof spec !== 'string' || !spec.trim()) return null;
+    const acc = { ctrl: false, alt: false, shift: false, meta: false, key: '' };
+    for (const raw of spec.split('+')) {
+      const t = raw.trim().toLowerCase();
+      if (!t) continue;
+      if (t === 'ctrl' || t === 'control') acc.ctrl = true;
+      else if (t === 'alt') acc.alt = true;
+      else if (t === 'shift') acc.shift = true;
+      else if (t === 'win' || t === 'meta' || t === 'cmd' || t === 'super') acc.meta = true;
+      else acc.key = KEY_ALIASES[t] || t;
+    }
+    return acc.key ? acc : null;
+  }
+
+  function matchAccel(ev, acc) {
+    if (!acc) return false;
+    if (!!ev.ctrlKey !== acc.ctrl) return false;
+    if (!!ev.altKey !== acc.alt) return false;
+    if (!!ev.shiftKey !== acc.shift) return false;
+    if (!!ev.metaKey !== acc.meta) return false;
+    return (ev.key || '').toLowerCase() === acc.key;
+  }
+
+  let SC = {};
+
+  function applyShortcuts() {
+    const s = (CFG && CFG.shortcuts) || {};
+    SC = {
+      global: (s.global || '').trim(),
+      hide: parseAccel(s.hide),
+      focus: parseAccel(s.focus),
+      translate: parseAccel(s.translate),
+      clear: parseAccel(s.clear),
+      copy: parseAccel(s.copy),
+    };
+
+    const setHint = (el, text) => {
+      if (!el) return;
+      el.textContent = text || '';
+      el.style.display = text ? '' : 'none';
+    };
+
+    setHint($('#kHide'), s.hide);
+    setHint($('#kCopy'), s.copy);
+    setHint($('#kClear'), s.clear);
+
+    const h1 = ['边输入边翻译'];
+    if (s.translate) h1.push(s.translate + ' 立即翻译');
+    $('#hint1').textContent = h1.join(' · ');
+
+    const h2 = [];
+    if (s.hide) h2.push(s.hide + ' 收起窗口');
+    if (s.global) h2.push(s.global + ' 随时唤出');
+    const h2el = $('#hint2');
+    h2el.textContent = h2.join(' · ');
+    h2el.style.display = h2.length ? '' : 'none';
+  }
+
+  /* ------------------------- 交互 ------------------------- */
+  function focusInput() {
+    input.focus();
+    const n = input.value.length;
+    try { input.setSelectionRange(n, n); } catch {}
+  }
+
+  // 宿主抢到前台之后会调这个：只补焦点，不动内容（窗口没激活时 focus() 会被忽略）
+  window.__bridgeFocus = function () { focusInput(); };
+
+  function resetAll() {
+    clearTimeout(timer);
+    seq++;
+    if (controller) controller.abort();
+    input.value = '';
+    lastKey = '';
+    lastResult = '';
+    setLoading(false);
+    showEmpty();
+    meta.textContent = '就绪';
+    providerEl.textContent = defaultProviderName();
+    srcLangEl.textContent = '自动';
+    tgtLangEl.textContent = '中文';
+    output.scrollTop = 0;
+    focusInput();
+  }
+
+  function closeWindow() {
+    // 交给宿主隐藏窗口，进程继续待命
+    if (window.bridge) { window.bridge.hide(); return; }
+    try { window.close(); } catch {}
+    // 万一浏览器不允许脚本关闭，退化成清空，至少不误触
+    setTimeout(() => { if (!document.hidden) resetAll(); }, 260);
+  }
+
+  input.addEventListener('input', schedule);
+
+  async function copyOut() {
+    if (!lastResult) return;
+    try {
+      await navigator.clipboard.writeText(lastResult);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = lastResult;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    copyBtn.textContent = '已复制';
+    setTimeout(() => (copyBtn.textContent = '复制'), 1200);
+    toast('译文已复制');
+  }
+
+  copyBtn.addEventListener('click', copyOut);
+
+  document.addEventListener('keydown', (e) => {
+    // 菜单打开时，Esc 先收起菜单（这一条不占配置）
+    if (e.key === 'Escape' && menu.classList.contains('open')) {
+      menu.classList.remove('open');
+      return;
+    }
+    if (matchAccel(e, SC.hide)) { e.preventDefault(); closeWindow(); return; }
+    if (matchAccel(e, SC.focus)) { e.preventDefault(); focusInput(); return; }
+    if (matchAccel(e, SC.clear)) { e.preventDefault(); resetAll(); return; }
+    if (matchAccel(e, SC.copy)) { e.preventDefault(); copyOut(); return; }
+    if (matchAccel(e, SC.translate)) { e.preventDefault(); runNow(); return; }
+  });
+
+  $('#menuBtn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.classList.toggle('open');
+  });
+  document.addEventListener('click', () => menu.classList.remove('open'));
+
+  // 窗口按钮：mousedown 先拦一下，别把焦点从输入框抢走（不然点完最小化再回来不能直接打字）
+  $('#btnMin').addEventListener('mousedown', (e) => e.preventDefault());
+  $('#btnClose').addEventListener('mousedown', (e) => e.preventDefault());
+  $('#btnMin').addEventListener('click', () => { menu.classList.remove('open'); window.bridge.minimize(); });
+  $('#btnClose').addEventListener('click', () => { menu.classList.remove('open'); closeWindow(); });
+
+  menu.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const act = btn.dataset.act;
+    menu.classList.remove('open');
+    if (act === 'clear') resetAll();
+    if (act === 'copy') copyOut();
+    if (act === 'hide') closeWindow();
+  });
+
+  // 页面重新可见时把焦点放回输入框
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) focusInput();
+  });
+
+  // 宿主每次唤起窗口都会发来 reset：清空上一次的输入并聚焦
+  if (window.bridge) window.bridge.onReset(resetAll);
+
+  applyShortcuts();
+  resetAll();
+})();
+</script>
+</body>
+</html>

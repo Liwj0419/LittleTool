@@ -1,0 +1,4 @@
+# 运行依赖：窗口 / 热键 / 截图
+pywebview>=6.2
+pynput>=1.8
+pillow>=11

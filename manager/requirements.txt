@@ -1,0 +1,5 @@
+# 运行依赖（和其它插件同一套：窗口 + 热键 + 托盘 + 图标）
+pywebview>=6.2
+pynput>=1.8
+pystray>=0.19
+pillow>=11
