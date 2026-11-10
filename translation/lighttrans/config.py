@@ -21,7 +21,7 @@ DEFAULT_PROVIDERS = [
 ]
 
 DEFAULT_SHORTCUTS = {
-    "global": "Ctrl+Alt+2",
+    "global": "Ctrl+Alt+4",
     "hide": "Esc",
     "focus": "Ctrl+F",
     "translate": "Ctrl+Enter",
@@ -31,25 +31,29 @@ DEFAULT_SHORTCUTS = {
 
 # 首次运行时写出去的默认配置，带注释方便用户改
 DEFAULT_CONFIG_TEXT = """{
-  "tool": { "mode": "resident" },
-  "appName": "轻翻译",
-  // 窗口尺寸（只影响首次启动，之后会记住你调过的尺寸）
-  "window": { "width": 874, "height": 941 },
-
-  // 快捷键。留空、删掉整行或者注释掉，就表示不用这个快捷键。
-  // 支持 Ctrl / Alt / Shift / Win 组合；键名可用字母、数字、Esc、Enter、F1-F12 等。
   "shortcuts": {
-    "global":    "Ctrl+Alt+2",     // 全局唤出窗口（主键盘和小键盘的数字都行）
-    "hide":      "Esc",            // 收起窗口
-    "focus":     "Ctrl+F",         // 光标跳到输入框
-    "translate": "Ctrl+Enter",     // 立即翻译
-    "clear":     "Ctrl+L",         // 清空
-    "copy":      "Ctrl+Shift+C"    // 复制译文
+    "global": "Ctrl+Alt+4", // 全局唤起
+    // 窗口内快捷键
+    "hide": "Esc",
+    "focus": "Ctrl+F",
+    "translate": "Ctrl+Enter",
+    "clear": "Ctrl+L",
+    "copy": "Ctrl+Shift+C"
   },
 
-  // 在线翻译接口，输入文字会发送给已启用的服务。
+  // 其他设置
+  "appName": "轻翻译",
+  "tool": { "mode": "resident" },
+  "window": { "width": 874, "height": 941 },
+
+  // 输入文字会发送给已启用的在线服务
   "providers": [
-    { "id": "mymemory", "name": "MyMemory", "enabled": true, "url": "https://api.mymemory.translated.net/get" }
+    {
+      "id": "mymemory",
+      "name": "MyMemory",
+      "enabled": true,
+      "url": "https://api.mymemory.translated.net/get"
+    }
   ]
 }
 """

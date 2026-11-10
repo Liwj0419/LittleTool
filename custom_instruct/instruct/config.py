@@ -12,7 +12,7 @@ from pathlib import Path
 APP_NAME = "CustomInstruct"
 
 DEFAULT_SHORTCUTS = {
-    "global": "Ctrl+Alt+,",
+    "global": "Ctrl+Alt+1",
     "hide": "Esc",
     "run": "Enter",
     "next": "Down",
@@ -31,46 +31,34 @@ DEFAULT_BEHAVIOR = {
 
 # 首次运行时写出去的默认配置，带注释方便用户改
 DEFAULT_CONFIG_TEXT = """{
-  "tool": { "mode": "resident" },
-  "appName": "指令启动器",
-  // 窗口尺寸（像素）
-  "window": { "width": 400, "height": 380 },
-
-  // 界面配色：auto（跟随系统）/ dark / light
-  "theme": "auto",
-
-  // 快捷键。写成空字符串 "" 就等于停用这个键；删掉整行则用内置默认值。
-  // 全局热键支持 Ctrl / Alt / Shift / Win 组合；逗号、句点这类符号直接写符号本身。
   "shortcuts": {
-    "global":    "Ctrl+Alt+,",     // 全局唤出启动器
-    "hide":      "Esc",            // 收起窗口
-    "run":       "Enter",          // 执行选中的指令
-    "next":      "Down",           // 下一条（到最后一条会绕回第一条）
-    "prev":      "Up",             // 上一条
-    "page_next": "PageDown",       // 往下翻 5 条
-    "page_prev": "PageUp",         // 往上翻 5 条
-    "reload":    "F5",             // 重新读取这个文件
-    "edit":      "Ctrl+O"          // 打开这个文件
+    "global": "Ctrl+Alt+1", // 全局唤起
+    // 窗口内快捷键
+    "hide": "Esc",
+    "run": "Enter",
+    "next": "Down",
+    "prev": "Up",
+    "page_next": "PageDown",
+    "page_prev": "PageUp",
+    "reload": "F5",
+    "edit": "Ctrl+O"
   },
 
-  // 行为开关
-  "behavior": {
-    "hide_on_blur":  true,
-    "always_on_top": true,
-    "beep_on_miss":  true
-  },
-
-  // 指令表。command 可以省略，省略等于 open：
-  //   open        打开文件夹，或者用默认程序打开文件
-  //   svn commit  打开该文件夹的 TortoiseSVN 提交窗口
-  //   svn update  打开该文件夹的 TortoiseSVN 更新窗口
-  // path 支持环境变量（%USERPROFILE%）和 ~；相对路径按本文件所在目录算。
-  // 改完不用重启，下次唤出启动器就生效。
+  // 指令列表，path 填要打开的文件或目录
   "commands": [
-    // { "name": "用户文件夹", "command": "open", "path": "%USERPROFILE%" },
-    // { "name": "打开项目", "command": "open", "path": "C:/示例/项目" },
-    // { "name": "提交项目", "command": "svn commit", "path": "C:/示例/项目" }
-  ]
+    // { "name": "用户文件夹", "command": "open", "path": "%USERPROFILE%" }
+  ],
+
+  // 其他设置
+  "appName": "指令启动器",
+  "tool": { "mode": "resident" },
+  "window": { "width": 400, "height": 380 },
+  "theme": "auto",
+  "behavior": {
+    "hide_on_blur": true,
+    "always_on_top": true,
+    "beep_on_miss": true
+  }
 }
 """
 

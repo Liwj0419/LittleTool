@@ -126,31 +126,25 @@ def load_jsonc(path: Path) -> dict:
 # --------------------------------------------------------------------------- 默认配置
 
 DEFAULT_CONFIG_TEXT = """{
-  "tool": { "mode": "resident" },
-  "appName": "工具箱管理器",
-  // 窗口尺寸：只决定首次启动的大小，之后拖多大就是多大
-  "window": { "width": 900, "height": 620, "minWidth": 740, "minHeight": 460 },
-
-  // 界面配色：auto（跟随系统）/ dark / light
-  "theme": "auto",
-
-  // 快捷键。留空、删掉整行或者注释掉，就表示不用这个快捷键。
-  // 各软件自己的唤出键在它们自己的 config.json 里，这里只管 Manager 自己。
   "shortcuts": {
-    "global":     "Ctrl+Alt+0",   // 全局唤出 / 收起 Manager
-    "hide":       "Esc"           // 收起窗口（进程留在托盘）
+    "global": "Ctrl+Alt+0", // 全局唤起
+    // 窗口内快捷键
+    "hide": "Esc"
   },
 
-  // 行为
+  // 工具清单，按这里的顺序显示
+  "apps": {},
+
+  // 其他设置
+  "appName": "工具箱管理器",
+  "tool": { "mode": "resident" },
+  "window": { "width": 900, "height": 620, "minWidth": 740, "minHeight": 460 },
+  "theme": "auto",
   "behavior": {
-    "hideOnBlur": false,      // 点到别处是否自动收起（管理器一般不收）
-    "pollMs":     1500,       // 多久刷新一次运行状态
-    "closeToTray": true       // 点关闭是收进托盘还是退出
-  },
-
-  // 要展示的软件：键是工具目录名，值是展示名。只有写在这里的才会出现；
-  // 写了但目录里没有 app.py 的不显示。顺序就是列表顺序。
-  "apps": {}
+    "hideOnBlur": false,
+    "pollMs": 1500,
+    "closeToTray": true
+  }
 }
 """
 

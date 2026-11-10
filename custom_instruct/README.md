@@ -4,7 +4,7 @@
 
 `--show` 复用已有实例；`--hidden` 按工具形态启动；`--reload` 重读运行中实例的配置；`--quit` 独立退出；`--selftest` 无界面检查后退出。两个启动脚本原样透传参数，运行始终使用自己的 `.venv`。
 
-按名字唤起指令的小启动器：`Ctrl+Alt+,` 叫出输入框，输入名字回车就跑。
+按名字唤起指令的小启动器：`Ctrl+Alt+1` 叫出输入框，输入名字回车就跑。
 常驻后台，不占任务栏；本工具不创建托盘。
 
 底层：**pywebview**（窗口，WebView2 渲染）+ **pynput**（全局热键）。
@@ -40,18 +40,18 @@ custom_instruct_start.bat --selftest      :: 无界面自检，写 selftest.log 
 
 第一次运行没有 `.venv` 时，脚本会自己建环境、装 `requirements.txt`，不用手动敲命令。
 
-无参数启动显示窗口；`--hidden` 静默待命。按 `Ctrl+Alt+,` 唤出，关闭窗口或按 Esc 只隐藏。
+无参数启动显示窗口；`--hidden` 静默待命。按 `Ctrl+Alt+1` 唤出，关闭窗口或按 Esc 只隐藏。
 
 ## 用法
 
-1. `Ctrl+Alt+,` 全局唤出启动器。
+1. `Ctrl+Alt+1` 全局唤出启动器。
 2. 输入名字，列表实时过滤。
 3. `Enter` 执行选中的那条，`Esc` 收起。
 4. 点到别的地方也会自动收起。
 
 | 按键 | 动作 |
 | --- | --- |
-| `Ctrl+Alt+,` | 全局唤出（在 `config.json` 里改） |
+| `Ctrl+Alt+1` | 全局唤出（在 `config.json` 里改） |
 | `↑` / `↓` | 上下选，最后一行再按 `↓` 回到第一行 |
 | `PageUp` / `PageDown` | 一次翻 5 条 |
 | `Enter` | 执行 |
@@ -108,7 +108,7 @@ custom_instruct_start.bat --selftest      :: 无界面自检，写 selftest.log 
   "window": { "width": 400, "height": 380 },
   "theme": "auto",
   "shortcuts": {
-    "global":    "Ctrl+Alt+,",
+    "global":    "Ctrl+Alt+1",
     "hide":      "Esc",
     "run":       "Enter",
     "next":      "Down",

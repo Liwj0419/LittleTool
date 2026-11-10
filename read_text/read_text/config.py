@@ -16,35 +16,33 @@ APP_NAME = "read_text"
 APP_TITLE = "read_text"
 
 DEFAULT_CONFIG_TEXT = """{
-  "tool": { "mode": "background" },
-  "appName": "屏幕取字",
-  // 按下这个键，锁定鼠标指针下的窗口并进入取字模式
   "shortcuts": {
-    "global": "Alt+F1",       // 唤起 / 锁定鼠标下的窗口
-    "cancel": "Esc",          // 退出取字模式（不复制）
-    "copy":   "Ctrl+C",       // 选中文字后按它复制，复制完才收起
-    "all":    "Ctrl+A"        // 全选当前图片里的文字
+    "global": "Alt+F1", // 全局唤起
+    // 窗口内快捷键
+    "cancel": "Esc",
+    "copy": "Ctrl+C",
+    "all": "Ctrl+A"
   },
 
-  // 覆盖层外观
+  // 其他设置
+  "appName": "屏幕取字",
+  "tool": { "mode": "background" },
   "overlay": {
-    "selectionColor": "rgba(0,120,215,0.32)",  // 拖选时的高亮底色
-    "hintColor": "rgba(20,20,20,0.82)",        // 顶部提示条底色
-    "showHint": true,                          // 是否显示顶部操作提示
+    "selectionColor": "rgba(0,120,215,0.32)",
+    "hintColor": "rgba(20,20,20,0.82)",
+    "showHint": true,
     "hintText": "拖动选择文字，按 Ctrl+C 复制；Esc 退出"
   },
 
-  // 识别参数
+  // 文字识别参数，upscale 可设为 1 至 3
   "ocr": {
-    "upscale": 2,        // 小图送识别前放大几倍（1-3）；超过 1600px 的图不会再放大
-    "joinGap": 0.28      // 两个字块间距超过「字宽 × 该值」才补空格
+    "upscale": 2,
+    "joinGap": 0.28
   },
-
-  // 行为
   "behavior": {
-    "copyOnRelease": false,       // 松手不复制，等按 Ctrl+C
-    "closeOnOutsideClick": false, // 点空白也不退出：只有「复制」或「Esc」才收起
-    "maxAreaRatio": 0.9           // 目标区域超过整屏这个比例时，仍然照做
+    "copyOnRelease": false,
+    "closeOnOutsideClick": false,
+    "maxAreaRatio": 0.9
   }
 }
 """

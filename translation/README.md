@@ -4,11 +4,11 @@
 
 `--show` 复用已有实例；`--hidden` 按工具形态启动；`--reload` 重读运行中实例的配置；`--quit` 独立退出；`--selftest` 无界面检查后退出。两个启动脚本原样透传参数，运行始终使用自己的 `.venv`。
 
-一个常驻后台的桌面进程，按 **`Ctrl` + `Alt` + `2`** 随时唤出，只做中英互译。
+一个常驻后台的桌面进程，按 **`Ctrl+Alt+4`** 随时唤出，只做中英互译。
 
 ## 怎么用
 
-- **打开**：`Ctrl` + `Alt` + `2`，或双击 `translation_start.bat`（桌面上的「翻译」图标也是它）
+- **打开**：`Ctrl+Alt+4`，或双击 `translation_start.bat`（桌面上的「翻译」图标也是它）
 - **收起**：`Esc`。窗口消失，进程继续在后台待命，下次唤出是瞬时的
 - **退出**：`./run.sh --quit`，不依赖 Manager
 - 翻译需要联网，输入的文字会发送给 MyMemory。免费用量有每日限制。 [MyMemory 用量说明](https://mymemory.translated.net/doc/usagelimits.php)
@@ -21,7 +21,7 @@
 
 | 配置项 | 默认值 | 作用 |
 | --- | --- | --- |
-| `global` | `Ctrl+Alt+2` | 全局唤出窗口（主键盘和小键盘的数字都能用） |
+| `global` | `Ctrl+Alt+4` | 全局唤出窗口（主键盘和小键盘的数字都能用） |
 | `hide` | `Esc` | 收起窗口 |
 | `focus` | `Ctrl+F` | 光标跳到输入框 |
 | `translate` | `Ctrl+Enter` | 立即翻译 |
@@ -32,7 +32,7 @@
 
 ```jsonc
 "shortcuts": {
-  "global": "Ctrl+Alt+2",
+  "global": "Ctrl+Alt+4",
   "hide":   "Esc",
   // "clear": "Ctrl+L",        ← 注释掉，Ctrl+L 就不再清空
   "copy":   ""                 ← 留空，同样不启用
@@ -88,7 +88,7 @@
   "window": { "width": 500, "height": 600 },
 
   "shortcuts": {
-    "global":    "Ctrl+Alt+2",
+    "global":    "Ctrl+Alt+4",
     "hide":      "Esc",
     "focus":     "Ctrl+F",
     "translate": "Ctrl+Enter",

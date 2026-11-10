@@ -1,43 +1,33 @@
 {
-  "tool": { "mode": "resident" },
-  // 中文名：Manager 用它显示这个软件（英文名就是文件夹名）
-  "appName": "Excel 快速搜索",
-  // 窗口尺寸（逻辑像素，会按显示器缩放换算）。最小 560x380。
-  "window": {
-    "width": 780,
-    "height": 540,
-    "theme": "light",      // dark / light / auto（跟随系统）
-    "on_top": true        // 始终置顶（和旧版一致），嫌挡事可以改 false
-  },
-
-  // 快捷键。留空、删掉整行或者注释掉，就表示不用这个快捷键。
-  // 支持 Ctrl / Alt / Shift / Win 组合；键名可用字母、数字、. , ; / 等符号、Esc、Enter、F1-F12。
   "shortcuts": {
-    "global": ["Ctrl+Alt+2"],                // 全局唤起（可写一个字符串，也可以写数组挂多个）
-    "hide":   "Esc",                         // 收起窗口（挂到托盘，进程继续待命）
-    "focus":  "Ctrl+F",                      // 光标跳回搜索框
-    "open":   "Enter",                       // 打开选中的文件
-    "reveal": "Ctrl+Enter",                  // 在资源管理器里定位该文件
-    "copy":   "Ctrl+Shift+C",                // 复制文件路径
-    "reload": "F5"                           // 重新扫描当前数据源
+    "global": ["Ctrl+Alt+2"], // 全局唤起
+    // 窗口内快捷键
+    "hide": "Esc",
+    "focus": "Ctrl+F",
+    "open": "Enter",
+    "reveal": "Ctrl+Enter",
+    "copy": "Ctrl+Shift+C",
+    "reload": "F5"
   },
 
-  // 把 path 填成自己的表格文件夹或一个表格文件，例如 "C:/表格"。
-  // 只配一个路径时，打开窗口会直接扫描该位置。
+  // 搜索位置，path 填表格目录或文件
   "sources": [
     { "key": "1", "name": "我的表格1", "path": "" },
     { "key": "2", "name": "我的表格1", "path": "" }
   ],
 
-  // 扫描规则
+  // 其他设置
+  "appName": "Excel 快速搜索",
+  "tool": { "mode": "resident" },
+  "window": { "width": 780, "height": 540, "theme": "light", "on_top": true },
+
+  // 扫描规则，max_depth 为 0 时扫描所有子目录
   "search": {
     "extensions": [".xlsx", ".xls", ".xlsm", ".xlsb"],
-    "skip_prefix": ["_win_"],   // 文件名以这些开头的直接跳过
-    "max_results": 5000,        // 最多收多少个文件
-    "max_depth": 0              // 子目录递归深度，0 = 不限
+    "skip_prefix": ["_win_"],
+    "max_results": 5000,
+    "max_depth": 0
   },
-
-  // 打开方式：优先交给同级的 excel_shower 查看器，找不到就退回系统默认程序
   "open": {
     "prefer_shower": false,
     "shower_dir": "../excel_shower"

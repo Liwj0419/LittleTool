@@ -77,7 +77,7 @@
 
 重新叫出来的方式（任选其一）：
 
-- 按 **`Ctrl+Alt+E`**（全局热键，任何程序在前台都有效，可在 `config.json` 里改）
+- 按 **`Ctrl+Alt+3`**（全局热键，任何程序在前台都有效，可在 `config.json` 里改）
 - 在 Manager 中点本工具的「打开窗口」
 - 再双击一次 `excel_shower_start.bat`
 
@@ -92,7 +92,7 @@
 {
   "window": { "width": 1100, "height": 680, "minWidth": 820, "minHeight": 520 },
   "shortcuts": {
-    "global":    "Ctrl+Alt+E",   // 全局唤出
+    "global":    "Ctrl+Alt+3",   // 全局唤出
     "hide":      "Esc",          // 收起窗口
     "open":      "Ctrl+O",
     "search":    "Ctrl+F",

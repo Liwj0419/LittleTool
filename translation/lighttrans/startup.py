@@ -16,7 +16,7 @@ from . import config as cfgmod
 from . import shortcut
 
 SHORTCUT_NAME = "翻译.lnk"
-SHORTCUT_DESC = "轻翻译：Ctrl+Alt+2 唤出"
+SHORTCUT_DESC = "打开轻翻译"
 
 
 def launch_target() -> tuple[str, str, str]:
