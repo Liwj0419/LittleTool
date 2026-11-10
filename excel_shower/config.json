@@ -9,7 +9,7 @@
   // 支持 Ctrl / Alt / Shift / Win 组合；键名可用字母、数字、Esc、Enter、
   // F1-F12、Space、Tab、Up / Down / Left / Right、Home / End / PageUp / PageDown 等。
   "shortcuts": {
-    "global":    "Ctrl+Alt+E",     // 全局唤出窗口（任何程序在前台都有效）
+    "global":    "Ctrl+Alt+3",     // 全局唤出窗口（任何程序在前台都有效）
     "hide":      "Esc",            // 收起窗口
     "open":      "Ctrl+O",         // 选择文件
     "search":    "Ctrl+F",         // 光标跳到搜索框

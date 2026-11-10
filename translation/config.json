@@ -8,7 +8,7 @@
   // 快捷键。留空、删掉整行或者注释掉，就表示不用这个快捷键。
   // 支持 Ctrl / Alt / Shift / Win 组合；键名可用字母、数字、Esc、Enter、F1-F12 等。
   "shortcuts": {
-    "global":    "Ctrl+Alt+2",     // 全局唤出窗口（主键盘和小键盘的数字都行）
+    "global":    "Ctrl+Alt+4",     // 全局唤出窗口（主键盘和小键盘的数字都行）
     "hide":      "Esc",            // 收起窗口
     "focus":     "Ctrl+F",         // 光标跳到输入框
     "translate": "Ctrl+Enter",     // 立即翻译
