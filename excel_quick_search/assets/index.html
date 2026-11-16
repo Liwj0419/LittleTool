@@ -829,7 +829,6 @@
   }
 
   let SC = {};
-  let GLOBAL_HINT = '';
 
   function applyShortcuts() {
     const s = (state.cfg && state.cfg.shortcuts) || {};
@@ -841,7 +840,6 @@
       copy: parseAccel(s.copy),
       reload: parseAccel(s.reload),
     };
-    GLOBAL_HINT = (s.global || '').trim();
 
     const keys = ['↑↓ 选择'];
     if (s.open) keys.push(s.open + ' 打开');

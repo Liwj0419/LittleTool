@@ -29,7 +29,7 @@ class App:
     # ---------------------------------------------------------------- 运行
 
     def run(self) -> None:
-        self.hotkey.start(self.cfg.global_specs())
+        self.hotkey.start(self.cfg.global_spec())
         try:
             self.ui.start()  # 阻塞到窗口销毁
         finally:
@@ -146,7 +146,7 @@ class App:
         self.cfg = cfgmod.Config.load()
         self.current_key = None
         self.current_files = []
-        self.hotkey.update(self.cfg.global_specs())
+        self.hotkey.update(self.cfg.global_spec())
         self.ui.notify_theme()
         self.ui.send_config()
         self.show_window(reset=False)

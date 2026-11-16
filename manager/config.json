@@ -1,6 +1,6 @@
 {
   "shortcuts": {
-    "global": "Ctrl+Alt+0", // 全局唤起
+    "global": "Ctrl+Shift+0", // 全局唤起
     // 窗口内快捷键
     "hide": "Esc"
   },
@@ -9,9 +9,8 @@
   "apps": {
     "custom_instruct": { "name": "自定义指令" },
     "excel_quick_search": { "name": "搜索EXCEL" },
-    "excel_shower": { "name": "显示EXCEL" },
-    "read_text": { "name": "屏幕取字" },
-    "translation": { "name": "翻译" }
+    "translation": { "name": "翻译" },
+    "read_text": { "name": "屏幕取字" }
   },
 
   // 其他设置

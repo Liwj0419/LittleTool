@@ -1,6 +1,6 @@
 {
   "shortcuts": {
-    "global": "Ctrl+Alt+1", // 全局唤起
+    "global": "Ctrl+Shift+1", // 全局唤起
     // 窗口内快捷键
     "hide": "Esc",
     "run": "Enter",
@@ -12,10 +12,18 @@
     "edit": "Ctrl+O"
   },
 
-  // 指令列表，path 填要打开的文件或目录
+  // path 填文件目录
+  // 指令: 
+  // open -> 打开某个文件夹
+  // svn commit -> svn提交某个文件夹
+  // svn update -> svn更新某个文件夹
   "commands": [
     { "name": "系统盘", "command": "open", "path": "%SystemDrive%/" },
     { "name": "用户文件夹", "command": "open", "path": "%USERPROFILE%" }
+    //{ "name": "svn_commit", "command": "svn commit", "path": "xxx文件夹路径 例如：C://Users//" },
+    //{ "name": "svn_update", "command": "svn update", "path": "xxx文件夹路径 例如：C://Users//" },
+  
+    //最后一行不要带 ,（逗号）
   ],
 
   // 其他设置

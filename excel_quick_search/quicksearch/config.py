@@ -11,15 +11,7 @@ from pathlib import Path
 
 APP_NAME = "ExcelQuickSearch"
 
-DEFAULT_SHORTCUTS = {
-    "global": ["Ctrl+Alt+2"],
-    "hide": "Esc",
-    "focus": "Ctrl+F",
-    "open": "Enter",
-    "reveal": "Ctrl+Enter",
-    "copy": "Ctrl+Shift+C",
-    "reload": "F5",
-}
+DEFAULT_GLOBAL = "Ctrl+Shift+2"
 
 DEFAULT_SEARCH = {
     "extensions": [".xlsx", ".xls", ".xlsm", ".xlsb"],
@@ -33,7 +25,7 @@ DEFAULT_OPEN = {"prefer_shower": True, "shower_dir": "../excel_shower"}
 # 首次运行时写出去的默认配置，带注释方便用户改
 DEFAULT_CONFIG_TEXT = r"""{
   "shortcuts": {
-    "global": ["Ctrl+Alt+2"], // 全局唤起
+    "global": "Ctrl+Shift+2", // 全局唤起，只能写一个
     // 窗口内快捷键
     "hide": "Esc",
     "focus": "Ctrl+F",
@@ -175,14 +167,16 @@ class Config:
         value = self.shortcuts.get(key)
         return value if isinstance(value, str) else None
 
-    def global_specs(self) -> list[str]:
-        """全局热键可以有多个，统一成列表。"""
+    def global_spec(self) -> str:
+        """全局唤起键只有一个；旧配置写成数组时取第一个。"""
         raw = self.shortcuts.get("global")
         if isinstance(raw, str):
-            return [raw] if raw.strip() else []
+            return raw.strip()
         if isinstance(raw, list):
-            return [s for s in raw if isinstance(s, str) and s.strip()]
-        return []
+            for item in raw:
+                if isinstance(item, str) and item.strip():
+                    return item.strip()
+        return ""
 
     def source(self, key: str) -> dict | None:
         for item in self.sources:
@@ -201,7 +195,7 @@ class Config:
         return {
             "theme": self.theme,
             "shortcuts": {k: v for k, v in self.shortcuts.items() if k != "global"}
-            | {"global": ", ".join(self.global_specs())},
+            | {"global": self.global_spec()},
             "sources": [
                 {
                     "key": str(s.get("key", "")),

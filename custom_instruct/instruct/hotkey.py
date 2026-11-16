@@ -163,6 +163,11 @@ def parse(spec: str | None) -> Accel | None:
             mods.add("shift")
             token = SHIFTED[token]
         token = KEY_ALIASES.get(token, token)
+        if not _known_key(token):
+            # 认不出的键（比如把 Shift 拼成 Shilf）直接判无效。
+            # 不能顺手当触发键收下，否则 "Ctrl+Shilf+1" 会悄悄变成 Ctrl+1，
+            # 用户按了没反应还查不出原因。
+            return None
         key = token
 
     if not _known_key(key):
@@ -327,7 +332,7 @@ class HotkeyManager:
                 cfgmod.log("[hotkey] 没有配置全局热键")
             self._hub.stop()
             return
-        self._hub.start({"global": combo}, [self._spec])
+        self._hub.start({"global": combo}, [str(combo)])
 
     def update(self, spec: str | None) -> None:
         if (spec or "").strip() == self._spec:

@@ -1,6 +1,6 @@
 {
   "shortcuts": {
-    "global": "Ctrl+Alt+4", // 全局唤起
+    "global": "Ctrl+Shift+3", // 全局唤起
     // 窗口内快捷键
     "hide": "Esc",
     "focus": "Ctrl+F",

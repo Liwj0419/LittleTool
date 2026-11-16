@@ -1,4 +1,4 @@
-"""全局热键：把 "Ctrl+Alt+." 这类写法变成全局监听（一次可以挂多个组合键）。
+"""全局热键：把 "Ctrl+Shift+2" 这类写法变成一个全局监听（本工具只挂一个唤起键）。
 
 底层统一走 pynput（根目录 AGENTS.md §1：全局热键只能用 pynput，不手写 RegisterHotKey、
 不用 keyboard 库、不上 AutoHotkey）。做法是一个 keyboard.Listener 收下全机的按下 / 抬起，
@@ -171,30 +171,28 @@ def parse(spec: str | None) -> Accel | None:
 
 
 class _Listener:
-    """pynput 全局监听 + 组合键判定，命中后调 on_fire(名字)。
+    """pynput 全局监听 + 单个组合键判定，命中后调 on_fire()。
 
-    一个实例只管一件事：把「谁被按全了」算出来。打开 / 收起窗口那种重活
-    由回调那边另开线程做，钩子线程里只改几个集合。
+    一个实例只管一件事：把「这一个组合键被按全了没有」算出来。打开窗口那种重活
+    由回调那边另开线程做，钩子线程里只改几个集合和一个标志。
     """
 
     def __init__(self, on_fire) -> None:
         self._on_fire = on_fire
-        self._combos: dict[str, Accel] = {}
-        self._labels: list[str] = []
+        self._accel: Accel | None = None
         self._mods: set[str] = set()
         self._keys: set[str] = set()
-        self._fired: set[str] = set()
+        self._fired = False
         self._lock = threading.Lock()
         self._listener = None
         self._stop = threading.Event()
 
     # ---------------------------------------------------------------- 生命周期
 
-    def start(self, combos: dict[str, Accel], labels: list[str]) -> None:
+    def start(self, accel: Accel, label: str) -> None:
         self.stop()
-        self._combos = dict(combos)
-        self._labels = [s for s in labels if s]
-        if not self._combos:
+        self._accel = accel
+        if accel is None:
             return
         if keyboard is None:
             cfgmod.log(f"[hotkey] pynput 用不了：{_IMPORT_ERROR!r}")
@@ -203,7 +201,7 @@ class _Listener:
         self._stop = stop
         if not self._spawn(stop):
             return
-        cfgmod.log("[hotkey] 已挂上 " + ", ".join(self._labels))
+        cfgmod.log(f"[hotkey] 已挂上 {label}")
         threading.Thread(
             target=self._watch, args=(stop,), name="hotkey-guard", daemon=True
         ).start()
@@ -217,9 +215,10 @@ class _Listener:
             except Exception:
                 pass
         with self._lock:
+            self._accel = None
             self._mods.clear()
             self._keys.clear()
-            self._fired.clear()
+            self._fired = False
 
     def _spawn(self, stop: threading.Event) -> bool:
         if keyboard is None or stop.is_set():
@@ -260,7 +259,7 @@ class _Listener:
         # 跑在系统钩子线程里：只改状态，不做任何会阻塞的事
         mod = _mod_of(key)
         token = "" if mod else _key_of(key)
-        hits: list[str] = []
+        hit = False
         with self._lock:
             if mod:
                 if mod in self._mods:
@@ -271,17 +270,19 @@ class _Listener:
                     return
                 self._keys.add(token)
 
-            now = frozenset(self._mods)
-            for name, accel in self._combos.items():
-                if name in self._fired or accel.key not in self._keys:
-                    continue
-                if accel.mods == now:
-                    self._fired.add(name)
-                    hits.append(name)
+            accel = self._accel
+            if (
+                accel is not None
+                and not self._fired
+                and accel.key in self._keys
+                and accel.mods == frozenset(self._mods)
+            ):
+                self._fired = True
+                hit = True
 
-        for name in hits:
+        if hit:
             threading.Thread(
-                target=self._run, args=(name,), name=f"hotkey-{name}", daemon=True
+                target=self._run, name="hotkey-fire", daemon=True
             ).start()
 
     def _on_release(self, key) -> None:
@@ -294,66 +295,58 @@ class _Listener:
                 self._keys.discard(token)
 
             # 触发键或它要的修饰键松开了，这个组合键重新武装
-            for name, accel in self._combos.items():
-                if name not in self._fired:
-                    continue
-                if (mod and mod in accel.mods) or token == accel.key:
-                    self._fired.discard(name)
+            accel = self._accel
+            if (
+                self._fired
+                and accel is not None
+                and ((mod and mod in accel.mods) or token == accel.key)
+            ):
+                self._fired = False
 
-    def _run(self, name: str) -> None:
+    def _run(self) -> None:
         try:
-            self._on_fire(name)
+            self._on_fire()
         except Exception as e:
-            cfgmod.log(f"[hotkey] {name} 回调失败：{e!r}")
+            cfgmod.log(f"[hotkey] 回调失败：{e!r}")
 
 
 class HotkeyManager:
-    """多个全局热键共用一个回调（config 里可以写一个字符串，也可以写数组）。"""
+    """只挂一个全局唤起键（config 的 shortcuts.global 写一个组合键字符串）。"""
 
     def __init__(self, on_trigger) -> None:
         self._on_trigger = on_trigger
-        self._specs: list[str] = []
+        self._spec = ""
         self._hub = _Listener(self._fire)
 
     # ---------------------------------------------------------------- 生命周期
 
     @staticmethod
-    def _norm(specs: list[str] | str | None) -> list[str]:
-        if isinstance(specs, str):
-            specs = [specs]
-        return [s.strip() for s in (specs or []) if isinstance(s, str) and s.strip()]
+    def _norm(spec: str | None) -> str:
+        return spec.strip() if isinstance(spec, str) else ""
 
-    def start(self, specs: list[str] | str | None) -> None:
-        self._specs = self._norm(specs)
-        combos: dict[str, Accel] = {}
-        labels: list[str] = []
-        for spec in self._specs:
-            combo = parse(spec)
-            if combo is None:
-                cfgmod.log(f"[hotkey] 看不懂的快捷键：{spec!r}")
-                continue
-            name = f"k{len(combos)}"
-            if any(c == combo for c in combos.values()):  # 同一个键写两遍，只挂一次
-                continue
-            combos[name] = combo
-            labels.append(spec)
-        if not combos:
-            cfgmod.log("[hotkey] 没有配置全局热键")
+    def start(self, spec: str | None) -> None:
+        self._spec = self._norm(spec)
+        accel = parse(self._spec)
+        if accel is None:
+            if self._spec:
+                cfgmod.log(f"[hotkey] 看不懂的快捷键：{self._spec!r}")
+            else:
+                cfgmod.log("[hotkey] 没有配置全局热键")
             self._hub.stop()
             return
-        self._hub.start(combos, labels)
+        self._hub.start(accel, self._spec)
 
-    def update(self, specs: list[str] | str | None) -> None:
-        if self._norm(specs) == self._specs:
+    def update(self, spec: str | None) -> None:
+        if self._norm(spec) == self._spec:
             return
         self.stop()
-        self.start(specs)
+        self.start(spec)
 
     def stop(self) -> None:
         self._hub.stop()
 
     # ---------------------------------------------------------------- 触发
 
-    def _fire(self, name: str = "") -> None:
+    def _fire(self) -> None:
         # _Listener 已经在新线程里调用，这里直接干活：开窗要读配置、等 WebView 回话
         self._on_trigger()
