@@ -13,7 +13,7 @@
   // 搜索位置，path 填表格目录或文件
   "sources": [
     { "key": "1", "name": "我的表格1", "path": "C://Users//" },
-    { "key": "2", "name": "我的表格1", "path": "C://Users//" }
+    { "key": "2", "name": "我的表格2", "path": "C://Users//" }
 
     // { "key": "1", "name": "我的表格1", "path": "xxx文件夹路径 例如：C://Users//" },
     //最后一行不要带 ,（逗号）
